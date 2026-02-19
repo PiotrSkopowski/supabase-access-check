@@ -39,7 +39,7 @@ const Index = () => {
       product_id: "9fdbb9bf-d45e-4f6b-9823-75e6bbd6715e",
       price: 99.99,
       quantity: 1,
-      source: "TEST",
+      source: "PRODIO",
       order_date: new Date().toISOString().split("T")[0],
     });
     if (error) {
