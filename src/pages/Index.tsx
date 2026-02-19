@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseConfigured } from "@/lib/supabase";
 import {
   Table,
   TableBody,
@@ -16,6 +16,11 @@ const Index = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!supabaseConfigured || !supabase) {
+      setError("Supabase is not configured. Please provide VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      setLoading(false);
+      return;
+    }
     const fetchData = async () => {
       const { data, error } = await supabase.from("order_history").select("*");
       if (error) {
@@ -34,7 +39,14 @@ const Index = () => {
       <h1 className="mb-6 text-3xl font-bold text-foreground">Order History</h1>
 
       {loading && <p className="text-muted-foreground">Loading…</p>}
-      {error && <p className="text-destructive">Error: {error}</p>}
+      {error && (
+        <div className="rounded-lg border border-destructive p-4">
+          <p className="text-destructive font-medium">Error: {error}</p>
+          <p className="text-muted-foreground text-sm mt-2">
+            Since these are publishable keys, you can share your Supabase URL and anon key directly in chat, and I'll add them to the code.
+          </p>
+        </div>
+      )}
 
       {!loading && !error && rows.length === 0 && (
         <p className="text-muted-foreground">No rows found in order_history.</p>
