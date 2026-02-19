@@ -14,24 +14,60 @@ const Index = () => {
   const [columns, setColumns] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [insertMsg, setInsertMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [inserting, setInserting] = useState(false);
+
+  const fetchData = async () => {
+    const { data, error } = await supabase.from("order_history").select("*");
+    if (error) {
+      setError(error.message);
+    } else if (data && data.length > 0) {
+      setColumns(Object.keys(data[0]));
+      setRows(data);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      const { data, error } = await supabase.from("order_history").select("*");
-      if (error) {
-        setError(error.message);
-      } else if (data && data.length > 0) {
-        setColumns(Object.keys(data[0]));
-        setRows(data);
-      }
-      setLoading(false);
-    };
     fetchData();
   }, []);
 
+  const handleTestSave = async () => {
+    setInserting(true);
+    setInsertMsg(null);
+    const { error } = await supabase.from("order_history").insert({
+      product_id: "9fdbb9bf-d45e-4f6b-9823-75e6bbd6715e",
+      price: 99.99,
+      quantity: 1,
+      source: "TEST",
+      order_date: new Date().toISOString().split("T")[0],
+    });
+    if (error) {
+      setInsertMsg({ type: "error", text: error.message });
+    } else {
+      setInsertMsg({ type: "success", text: "Row inserted successfully!" });
+      await fetchData();
+    }
+    setInserting(false);
+  };
+
   return (
     <div className="min-h-screen bg-background p-8">
-      <h1 className="mb-6 text-3xl font-bold text-foreground">Order History</h1>
+      <div className="mb-6 flex items-center gap-4">
+        <h1 className="text-3xl font-bold text-foreground">Order History</h1>
+        <button
+          onClick={handleTestSave}
+          disabled={inserting}
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        >
+          {inserting ? "Saving…" : "Test Save"}
+        </button>
+      </div>
+      {insertMsg && (
+        <div className={`mb-4 rounded-lg border p-3 text-sm font-medium ${insertMsg.type === "success" ? "border-green-500 text-green-700 bg-green-50" : "border-destructive text-destructive"}`}>
+          {insertMsg.text}
+        </div>
+      )}
 
       {loading && <p className="text-muted-foreground">Loading…</p>}
       {error && (
