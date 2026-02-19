@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase, supabaseConfigured } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import {
   Table,
   TableBody,
@@ -16,11 +16,6 @@ const Index = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!supabaseConfigured || !supabase) {
-      setError("Supabase is not configured. Please provide VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
-      setLoading(false);
-      return;
-    }
     const fetchData = async () => {
       const { data, error } = await supabase.from("order_history").select("*");
       if (error) {
