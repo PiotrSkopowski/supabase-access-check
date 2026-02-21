@@ -1,20 +1,20 @@
 import { useState, useEffect, useRef } from "react";
-import { Search } from "lucide-react";
+import { Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabase";
 
-interface Product {
+interface Customer {
   id: string;
   name: string;
 }
 
-interface ProductSearchProps {
-  onSelect: (product: Product) => void;
+interface CustomerSearchProps {
+  onSelect: (customer: Customer) => void;
 }
 
-export function ProductSearch({ onSelect }: ProductSearchProps) {
+export function CustomerSearch({ onSelect }: CustomerSearchProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Product[]>([]);
+  const [results, setResults] = useState<Customer[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -28,13 +28,14 @@ export function ProductSearch({ onSelect }: ProductSearchProps) {
 
     const timeout = setTimeout(async () => {
       setLoading(true);
-      const fuzzy = `%${query.trim().split("").join("%")}%`;
+      // Fuzzy: split query into chars with % between for typo tolerance
+      const fuzzyPattern = `%${query.trim().split("").join("%")}%`;
       const { data } = await supabase
-        .from("products")
+        .from("customers")
         .select("id, name")
-        .ilike("name", fuzzy)
+        .ilike("name", fuzzyPattern)
         .limit(10);
-      setResults((data as Product[]) ?? []);
+      setResults((data as Customer[]) ?? []);
       setOpen(true);
       setLoading(false);
     }, 250);
@@ -54,9 +55,9 @@ export function ProductSearch({ onSelect }: ProductSearchProps) {
 
   return (
     <div ref={wrapperRef} className="relative w-full max-w-xl">
-      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <Users className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
       <Input
-        placeholder="Wyszukaj produkt po nazwie…"
+        placeholder="Wyszukaj klienta po nazwie…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         className="pl-10 h-12 text-base border-border bg-card shadow-sm"
@@ -69,20 +70,20 @@ export function ProductSearch({ onSelect }: ProductSearchProps) {
           ) : results.length === 0 ? (
             <p className="px-4 py-3 text-sm text-muted-foreground">Brak wyników dla „{query}"</p>
           ) : (
-            results.map((p) => (
+            results.map((c) => (
               <button
-                key={p.id}
+                key={c.id}
                 onClick={() => {
-                  onSelect(p);
+                  onSelect(c);
                   setQuery("");
                   setOpen(false);
                 }}
                 className="w-full text-left px-4 py-3 hover:bg-accent transition-colors flex items-center gap-3 border-b border-border last:border-0"
               >
                 <div className="rounded-md bg-secondary p-1.5">
-                  <Search className="h-3.5 w-3.5 text-secondary-foreground" />
+                  <Users className="h-3.5 w-3.5 text-secondary-foreground" />
                 </div>
-                <span className="text-sm font-medium text-foreground">{p.name}</span>
+                <span className="text-sm font-medium text-foreground">{c.name}</span>
               </button>
             ))
           )}
