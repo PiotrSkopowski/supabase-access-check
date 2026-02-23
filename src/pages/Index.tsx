@@ -1,193 +1,307 @@
-import { useState, useCallback } from "react";
-import { Package, Users, ArrowLeft } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Search, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ProductSearch } from "@/components/ProductSearch";
-import { CustomerSearch } from "@/components/CustomerSearch";
-import { ProductDetails } from "@/components/ProductDetails";
-import { AddPriceForm } from "@/components/AddPriceForm";
-import { PriceHistoryTable } from "@/components/PriceHistoryTable";
-import { CustomerOrdersTable } from "@/components/CustomerOrdersTable";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
-interface SelectedProduct { id: string; name: string; }
-interface SelectedCustomer { id: string; name: string; }
-interface OrderRow { id: string; product_id: string; price: number; quantity: number; created_at: string; source: string; order_date: string; }
-interface CustomerOrder { id: string; product_name: string; price: number; quantity: number; created_at: string; }
+interface Customer {
+  id: string;
+  name: string;
+}
+
+interface ProductGroup {
+  id: string;
+  name: string;
+}
+
+interface ResultRow {
+  id: string;
+  order_date: string;
+  customer_name: string;
+  group_name: string;
+  product_name: string;
+  product_description: string;
+  quantity: number;
+  price: number;
+}
+
+const PAGE_SIZE = 50;
+
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("pl-PL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+const formatCurrency = (val: number) =>
+  val.toLocaleString("pl-PL", { style: "currency", currency: "PLN" });
 
 const Index = () => {
-  // Product mode
-  const [selectedProduct, setSelectedProduct] = useState<SelectedProduct | null>(null);
-  const [productHistory, setProductHistory] = useState<OrderRow[]>([]);
-  const [productLoading, setProductLoading] = useState(false);
+  // Filter states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
-  // Customer mode
-  const [selectedCustomer, setSelectedCustomer] = useState<SelectedCustomer | null>(null);
-  const [customerOrders, setCustomerOrders] = useState<CustomerOrder[]>([]);
-  const [customerLoading, setCustomerLoading] = useState(false);
+  // Dropdown data
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [productGroups, setProductGroups] = useState<ProductGroup[]>([]);
 
-  const fetchProductHistory = useCallback(async (productId: string) => {
-    setProductLoading(true);
-    const { data } = await supabase
-      .from("order_history")
-      .select("*")
-      .eq("product_id", productId)
-      .order("created_at", { ascending: false });
-    setProductHistory((data as OrderRow[]) ?? []);
-    setProductLoading(false);
+  // Results
+  const [rows, setRows] = useState<ResultRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(0);
+
+  // Fetch dropdown options on mount
+  useEffect(() => {
+    const fetchOptions = async () => {
+      const [custRes, groupRes] = await Promise.all([
+        supabase.from("customers").select("id, name").order("name"),
+        supabase.from("product_groups").select("id, name").order("name"),
+      ]);
+      setCustomers((custRes.data as Customer[]) ?? []);
+      setProductGroups((groupRes.data as ProductGroup[]) ?? []);
+    };
+    fetchOptions();
   }, []);
 
-  const fetchCustomerOrders = useCallback(async (customerId: string) => {
-    setCustomerLoading(true);
-    const { data: orders } = await supabase
-      .from("order_history")
-      .select("id, product_id, price, quantity, created_at")
-      .eq("customer_id", customerId)
-      .order("created_at", { ascending: false });
+  // Fetch results
+  const fetchResults = useCallback(async () => {
+    setLoading(true);
 
-    if (!orders || orders.length === 0) {
-      setCustomerOrders([]);
-      setCustomerLoading(false);
+    let query = supabase
+      .from("order_history")
+      .select(
+        "id, order_date, price, quantity, product_id, customer_id, products!inner(name, description, group_id, product_groups(name)), customers!inner(name)",
+        { count: "exact" }
+      );
+
+    if (selectedCustomerId) {
+      query = query.eq("customer_id", selectedCustomerId);
+    }
+
+    if (selectedGroupId) {
+      query = query.eq("products.group_id", selectedGroupId);
+    }
+
+    if (searchQuery.trim()) {
+      const q = `%${searchQuery.trim()}%`;
+      query = query.or(
+        `products.name.ilike.${q},products.description.ilike.${q},customers.name.ilike.${q}`
+      );
+    }
+
+    query = query
+      .order("order_date", { ascending: false })
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+    const { data, count, error } = await query;
+
+    if (error) {
+      console.error("Fetch error:", error);
+      setRows([]);
+      setTotalCount(0);
+      setLoading(false);
       return;
     }
 
-    // Fetch product names for all product_ids
-    const productIds = [...new Set(orders.map((o: any) => o.product_id))];
-    const { data: products } = await supabase
-      .from("products")
-      .select("id, name")
-      .in("id", productIds);
+    const mapped: ResultRow[] = (data ?? []).map((row: any) => ({
+      id: row.id,
+      order_date: row.order_date ?? row.created_at ?? "",
+      customer_name: row.customers?.name ?? "—",
+      group_name: row.products?.product_groups?.name ?? "—",
+      product_name: row.products?.name ?? "—",
+      product_description: row.products?.description ?? "",
+      quantity: row.quantity,
+      price: row.price,
+    }));
 
-    const productMap = new Map((products ?? []).map((p: any) => [p.id, p.name]));
+    setRows(mapped);
+    setTotalCount(count ?? 0);
+    setLoading(false);
+  }, [searchQuery, selectedCustomerId, selectedGroupId, page]);
 
-    setCustomerOrders(
-      orders.map((o: any) => ({
-        id: o.id,
-        product_name: productMap.get(o.product_id) ?? o.product_id,
-        price: o.price,
-        quantity: o.quantity,
-        created_at: o.created_at,
-      }))
-    );
-    setCustomerLoading(false);
-  }, []);
+  // Re-fetch when filters or page change
+  useEffect(() => {
+    fetchResults();
+  }, [fetchResults]);
 
-  const handleSelectProduct = (product: SelectedProduct) => {
-    setSelectedProduct(product);
-    fetchProductHistory(product.id);
-  };
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(0);
+  }, [searchQuery, selectedCustomerId, selectedGroupId]);
 
-  const handleSelectCustomer = (customer: SelectedCustomer) => {
-    setSelectedCustomer(customer);
-    fetchCustomerOrders(customer.id);
-  };
-
-  const latestPrice = productHistory.length > 0 ? productHistory[0].price : null;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-[1400px] mx-auto space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Pulpit wycen</h1>
-        <p className="text-muted-foreground mt-1">Wyszukuj produkty i klientów, zarządzaj wycenami</p>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          Pulpit zleceń
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Przeszukuj historię zleceń po produkcie, kliencie lub grupie produktowej
+        </p>
       </div>
 
-      <Tabs defaultValue="product" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="product" className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            Wg produktu
-          </TabsTrigger>
-          <TabsTrigger value="customer" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Wg klienta
-          </TabsTrigger>
-        </TabsList>
+      {/* ===== FILTER CARD ===== */}
+      <Card className="shadow-sm">
+        <CardContent className="pt-6 space-y-4">
+          {/* Row 1: Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Szukaj po symbolu produktu, opisie lub nazwie klienta..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 h-11 text-base"
+            />
+          </div>
 
-        {/* ====== PRODUCT TAB ====== */}
-        <TabsContent value="product" className="space-y-6 mt-6">
-          {!selectedProduct ? (
-            <section>
-              <h2 className="text-xl font-semibold text-foreground mb-3">Wyszukaj produkt</h2>
-              <ProductSearch onSelect={handleSelectProduct} />
-            </section>
-          ) : (
-            <>
+          {/* Row 2: Dropdowns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              value={selectedCustomerId ?? "ALL"}
+              onValueChange={(v) => setSelectedCustomerId(v === "ALL" ? null : v)}
+            >
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Wybierz klienta" />
+              </SelectTrigger>
+              <SelectContent className="z-50 bg-popover">
+                <SelectItem value="ALL">Wszyscy klienci</SelectItem>
+                {customers.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={selectedGroupId ?? "ALL"}
+              onValueChange={(v) => setSelectedGroupId(v === "ALL" ? null : v)}
+            >
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Grupa produktowa" />
+              </SelectTrigger>
+              <SelectContent className="z-50 bg-popover">
+                <SelectItem value="ALL">Wszystkie grupy</SelectItem>
+                {productGroups.map((g) => (
+                  <SelectItem key={g.id} value={g.id}>
+                    {g.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ===== RESULTS TABLE ===== */}
+      <Card className="shadow-sm overflow-hidden">
+        <div className="overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="font-semibold min-w-[110px]">Data</TableHead>
+                <TableHead className="font-semibold min-w-[150px]">Klient</TableHead>
+                <TableHead className="font-semibold min-w-[130px]">Grupa</TableHead>
+                <TableHead className="font-semibold min-w-[130px]">Symbol</TableHead>
+                <TableHead className="font-semibold min-w-[200px]">Opis</TableHead>
+                <TableHead className="font-semibold text-right min-w-[80px]">Ilość</TableHead>
+                <TableHead className="font-semibold text-right min-w-[110px]">Cena</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                Array.from({ length: 8 }).map((_, i) => (
+                  <TableRow key={i}>
+                    {Array.from({ length: 7 }).map((_, j) => (
+                      <TableCell key={j}>
+                        <Skeleton className="h-4 w-full" />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    Brak wyników. Zmień kryteria wyszukiwania.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="whitespace-nowrap">{formatDate(row.order_date)}</TableCell>
+                    <TableCell>{row.customer_name}</TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
+                        {row.group_name}
+                      </span>
+                    </TableCell>
+                    <TableCell className="font-medium">{row.product_name}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm max-w-[300px] truncate">
+                      {row.product_description}
+                    </TableCell>
+                    <TableCell className="text-right">{row.quantity}</TableCell>
+                    <TableCell className="text-right font-medium">{formatCurrency(row.price)}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Pagination */}
+        {!loading && totalCount > 0 && (
+          <div className="flex items-center justify-between border-t px-4 py-3 bg-muted/30">
+            <p className="text-sm text-muted-foreground">
+              Wyniki {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} z {totalCount}
+            </p>
+            <div className="flex items-center gap-2">
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                onClick={() => { setSelectedProduct(null); setProductHistory([]); }}
-                className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+                disabled={page === 0}
+                onClick={() => setPage((p) => p - 1)}
               >
-                <ArrowLeft className="h-4 w-4" />
-                Wróć do wyszukiwania
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Poprzednia
               </Button>
-
-              <ProductDetails
-                name={selectedProduct.name}
-                latestPrice={latestPrice}
-                totalOrders={productHistory.length}
-              />
-
-              <AddPriceForm
-                productId={selectedProduct.id}
-                productName={selectedProduct.name}
-                onSaved={() => fetchProductHistory(selectedProduct.id)}
-              />
-
-              <section>
-                <h3 className="text-xl font-semibold text-foreground mb-4">Historia wycen</h3>
-                {productLoading ? (
-                  <p className="text-muted-foreground">Ładowanie…</p>
-                ) : (
-                  <PriceHistoryTable rows={productHistory} />
-                )}
-              </section>
-            </>
-          )}
-        </TabsContent>
-
-        {/* ====== CUSTOMER TAB ====== */}
-        <TabsContent value="customer" className="space-y-6 mt-6">
-          {!selectedCustomer ? (
-            <section>
-              <h2 className="text-xl font-semibold text-foreground mb-3">Wyszukaj klienta</h2>
-              <CustomerSearch onSelect={handleSelectCustomer} />
-            </section>
-          ) : (
-            <>
+              <span className="text-sm text-muted-foreground px-2">
+                {page + 1} / {totalPages}
+              </span>
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                onClick={() => { setSelectedCustomer(null); setCustomerOrders([]); }}
-                className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => p + 1)}
               >
-                <ArrowLeft className="h-4 w-4" />
-                Wróć do wyszukiwania
+                Następna
+                <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
-
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-primary p-2.5">
-                  <Users className="h-6 w-6 text-primary-foreground" />
-                </div>
-                <h2 className="text-3xl font-bold tracking-tight text-foreground">
-                  {selectedCustomer.name}
-                </h2>
-              </div>
-
-              <section>
-                <h3 className="text-xl font-semibold text-foreground mb-4">
-                  Zamówienia klienta ({customerOrders.length})
-                </h3>
-                {customerLoading ? (
-                  <p className="text-muted-foreground">Ładowanie…</p>
-                ) : (
-                  <CustomerOrdersTable rows={customerOrders} />
-                )}
-              </section>
-            </>
-          )}
-        </TabsContent>
-      </Tabs>
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
   );
 };
