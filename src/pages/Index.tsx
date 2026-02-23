@@ -21,25 +21,26 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-interface Customer {
-  id: string;
-  name: string;
-}
-
-interface ProductGroup {
-  id: string;
-  name: string;
-}
+// ResultRow includes IDs for cascading filters
 
 interface ResultRow {
   id: string;
   order_date: string;
   customer_name: string;
+  customer_id: string | number;
   group_name: string;
+  group_id: string | number;
   product_name: string;
   product_description: string;
+  product_id: string;
   quantity: number;
   price: number;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  description: string;
 }
 
 const PAGE_SIZE = 50;
@@ -57,99 +58,102 @@ const formatCurrency = (val: number) =>
 const Index = () => {
   // Filter states
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
-  // Dropdown data
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [productGroups, setProductGroups] = useState<ProductGroup[]>([]);
-
-  // Results
-  const [rows, setRows] = useState<ResultRow[]>([]);
+  // All fetched rows (before text filter)
+  const [allRows, setAllRows] = useState<ResultRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
 
-  // Fetch dropdown options on mount
-  useEffect(() => {
-    const fetchOptions = async () => {
-      const [custRes, groupRes] = await Promise.all([
-        supabase.from("customers").select("id, name").order("name"),
-        supabase.from("product_groups").select("id, name").order("name"),
-      ]);
-      setCustomers((custRes.data as Customer[]) ?? []);
-      setProductGroups((groupRes.data as ProductGroup[]) ?? []);
-    };
-    fetchOptions();
-  }, []);
-
-  // Fetch results
+  // Fetch results from Supabase (filtered only by dropdowns)
   const fetchResults = useCallback(async () => {
     setLoading(true);
 
     let query = supabase
       .from("order_history")
       .select(
-        "id, order_date, price, quantity, product_id, customer_id, products!inner(name, description, group_id, product_groups(name)), customers!inner(name)",
-        { count: "exact" }
+        "id, order_date, price, quantity, product_id, customer_id, products!inner(name, description, group_id, product_groups(name)), customers!inner(name)"
       );
 
+    if (selectedProductId) {
+      query = query.eq("product_id", selectedProductId);
+    }
     if (selectedCustomerId) {
       query = query.eq("customer_id", selectedCustomerId);
     }
-
     if (selectedGroupId) {
       query = query.eq("products.group_id", selectedGroupId);
     }
 
-    if (searchQuery.trim()) {
-      const q = `%${searchQuery.trim()}%`;
-      query = query.or(
-        `products.name.ilike.${q},products.description.ilike.${q},customers.name.ilike.${q}`
-      );
-    }
+    query = query.order("order_date", { ascending: false }).limit(5000);
 
-    query = query
-      .order("order_date", { ascending: false })
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-    const { data, count, error } = await query;
+    const { data, error } = await query;
 
     if (error) {
       console.error("Fetch error:", error);
-      setRows([]);
-      setTotalCount(0);
+      setAllRows([]);
       setLoading(false);
       return;
     }
 
     const mapped: ResultRow[] = (data ?? []).map((row: any) => ({
       id: row.id,
-      order_date: row.order_date ?? row.created_at ?? "",
+      order_date: row.order_date ?? "",
       customer_name: row.customers?.name ?? "—",
+      customer_id: row.customer_id,
       group_name: row.products?.product_groups?.name ?? "—",
+      group_id: row.products?.group_id,
       product_name: row.products?.name ?? "—",
       product_description: row.products?.description ?? "",
+      product_id: row.product_id,
       quantity: row.quantity,
       price: row.price,
     }));
 
-    setRows(mapped);
-    setTotalCount(count ?? 0);
+    setAllRows(mapped);
     setLoading(false);
-  }, [searchQuery, selectedCustomerId, selectedGroupId, page]);
+  }, [selectedProductId, selectedCustomerId, selectedGroupId]);
 
-  // Re-fetch when filters or page change
   useEffect(() => {
     fetchResults();
   }, [fetchResults]);
 
-  // Reset page when filters change
+  // Reset page when any filter changes
   useEffect(() => {
     setPage(0);
-  }, [searchQuery, selectedCustomerId, selectedGroupId]);
+  }, [searchQuery, selectedProductId, selectedCustomerId, selectedGroupId]);
 
+  // Frontend text filtering
+  const filteredRows = searchQuery.trim()
+    ? allRows.filter((r) => {
+        const q = searchQuery.trim().toLowerCase();
+        return (
+          r.product_name.toLowerCase().includes(q) ||
+          (r.product_description ?? "").toLowerCase().includes(q) ||
+          r.customer_name.toLowerCase().includes(q)
+        );
+      })
+    : allRows;
+
+  // Cascading dropdown options from filtered results
+  const availableProducts = Array.from(
+    new Map(filteredRows.map((r) => [r.product_id, { id: r.product_id, name: r.product_name, description: r.product_description }])).values()
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
+  const availableCustomers = Array.from(
+    new Map(filteredRows.map((r) => [r.customer_id, { id: r.customer_id, name: r.customer_name }])).values()
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
+  const availableGroups = Array.from(
+    new Map(filteredRows.filter((r) => r.group_id).map((r) => [r.group_id, { id: r.group_id, name: r.group_name }])).values()
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
+  // Paginate filtered results
+  const totalCount = filteredRows.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const rows = filteredRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-6">
@@ -176,19 +180,36 @@ const Index = () => {
             />
           </div>
 
-          {/* Row 2: Dropdowns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Row 2: Three cascading dropdowns */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Select
-              value={selectedCustomerId ?? "ALL"}
+              value={selectedProductId ?? "ALL"}
+              onValueChange={(v) => setSelectedProductId(v === "ALL" ? null : v)}
+            >
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Produkt" />
+              </SelectTrigger>
+              <SelectContent className="z-50 bg-popover max-h-72">
+                <SelectItem value="ALL">Wszystkie produkty</SelectItem>
+                {availableProducts.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}{p.description ? ` - ${p.description}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={selectedCustomerId != null ? String(selectedCustomerId) : "ALL"}
               onValueChange={(v) => setSelectedCustomerId(v === "ALL" ? null : v)}
             >
               <SelectTrigger className="h-10">
-                <SelectValue placeholder="Wybierz klienta" />
+                <SelectValue placeholder="Klient" />
               </SelectTrigger>
-              <SelectContent className="z-50 bg-popover">
+              <SelectContent className="z-50 bg-popover max-h-72">
                 <SelectItem value="ALL">Wszyscy klienci</SelectItem>
-                {customers.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
+                {availableCustomers.map((c) => (
+                  <SelectItem key={String(c.id)} value={String(c.id)}>
                     {c.name}
                   </SelectItem>
                 ))}
@@ -196,16 +217,16 @@ const Index = () => {
             </Select>
 
             <Select
-              value={selectedGroupId ?? "ALL"}
+              value={selectedGroupId != null ? String(selectedGroupId) : "ALL"}
               onValueChange={(v) => setSelectedGroupId(v === "ALL" ? null : v)}
             >
               <SelectTrigger className="h-10">
-                <SelectValue placeholder="Grupa produktowa" />
+                <SelectValue placeholder="Grupa produktów" />
               </SelectTrigger>
-              <SelectContent className="z-50 bg-popover">
+              <SelectContent className="z-50 bg-popover max-h-72">
                 <SelectItem value="ALL">Wszystkie grupy</SelectItem>
-                {productGroups.map((g) => (
-                  <SelectItem key={g.id} value={g.id}>
+                {availableGroups.map((g) => (
+                  <SelectItem key={String(g.id)} value={String(g.id)}>
                     {g.name}
                   </SelectItem>
                 ))}
