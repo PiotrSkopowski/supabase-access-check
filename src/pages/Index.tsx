@@ -87,7 +87,7 @@ const Index = () => {
       query = query.eq("products.group_id", selectedGroupId);
     }
 
-    query = query.order("order_date", { ascending: false }).limit(5000);
+    query = query.order("order_date", { ascending: false }).limit(50000);
 
     const { data, error } = await query;
 
