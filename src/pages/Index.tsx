@@ -258,7 +258,7 @@ const Index = () => {
                     </TableCell>
                     <TableCell className="text-right">
                       {row.catalog_price != null
-                        ? formatPrice(row.catalog_price)
+                        ? formatPrice(row.catalog_price, row.currency)
                         : <span className="text-muted-foreground text-xs">Brak w katalogu</span>}
                     </TableCell>
                     <TableCell className="text-right">{renderDiff(row)}</TableCell>
