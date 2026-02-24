@@ -38,7 +38,6 @@ interface ResultRow {
   quantity: number;
   price: number;
   current_price: number | null;
-  currency: string;
 }
 
 interface Product {
@@ -56,8 +55,8 @@ const formatDate = (iso: string) =>
     year: "numeric",
   });
 
-const formatPrice = (val: number, currency: string) =>
-  `${val.toFixed(2)} ${currency}`;
+const formatPrice = (val: number) =>
+  `${val.toFixed(2)} PLN`;
 
 const calcDiscount = (catalogPrice: number | null, orderPrice: number): number | null => {
   if (catalogPrice == null || catalogPrice === 0) return null;
@@ -83,7 +82,7 @@ const Index = () => {
     let query = supabase
       .from("order_history")
       .select(
-        "id, order_date, price, quantity, currency, product_id, customer_id, products!inner(name, description, group_id, prodio_id, current_price, product_groups(name)), customers!inner(name)"
+        "id, order_date, price, quantity, product_id, customer_id, products(name, description, group_id, prodio_id, current_price, product_groups(name)), customers(name)"
       );
 
     if (selectedProductId) {
@@ -121,7 +120,6 @@ const Index = () => {
       quantity: row.quantity,
       price: row.price,
       current_price: row.products?.current_price ?? null,
-      currency: row.currency || "PLN",
     }));
 
     setAllRows(mapped);
@@ -298,9 +296,9 @@ const Index = () => {
                       {row.product_description}
                     </TableCell>
                     <TableCell className="text-right">{row.quantity}</TableCell>
-                    <TableCell className="text-right font-medium">{formatPrice(row.price, row.currency)}</TableCell>
+                    <TableCell className="text-right font-medium">{formatPrice(row.price)}</TableCell>
                     <TableCell className="text-right font-medium">
-                      {row.current_price != null ? formatPrice(row.current_price, row.currency) : <span className="text-muted-foreground">BRAK</span>}
+                      {row.current_price != null ? formatPrice(row.current_price) : <span className="text-muted-foreground">BRAK</span>}
                     </TableCell>
                     <TableCell className="text-right font-medium">
                       {(() => {
