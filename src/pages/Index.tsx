@@ -37,6 +37,8 @@ interface ResultRow {
   prodio_id: string | null;
   quantity: number;
   price: number;
+  current_price: number | null;
+  currency: string;
 }
 
 interface Product {
@@ -54,8 +56,13 @@ const formatDate = (iso: string) =>
     year: "numeric",
   });
 
-const formatCurrency = (val: number) =>
-  val.toLocaleString("pl-PL", { style: "currency", currency: "PLN" });
+const formatPrice = (val: number, currency: string) =>
+  `${val.toFixed(2)} ${currency}`;
+
+const calcDiscount = (catalogPrice: number | null, orderPrice: number): number | null => {
+  if (catalogPrice == null || catalogPrice === 0) return null;
+  return ((catalogPrice - orderPrice) / catalogPrice) * 100;
+};
 
 const Index = () => {
   // Filter states
@@ -76,7 +83,7 @@ const Index = () => {
     let query = supabase
       .from("order_history")
       .select(
-        "id, order_date, price, quantity, product_id, customer_id, products!inner(name, description, group_id, prodio_id, product_groups(name)), customers!inner(name)"
+        "id, order_date, price, quantity, currency, product_id, customer_id, products!inner(name, description, group_id, prodio_id, current_price, product_groups(name)), customers!inner(name)"
       );
 
     if (selectedProductId) {
@@ -113,6 +120,8 @@ const Index = () => {
       prodio_id: row.products?.prodio_id ?? null,
       quantity: row.quantity,
       price: row.price,
+      current_price: row.products?.current_price ?? null,
+      currency: row.currency || "PLN",
     }));
 
     setAllRows(mapped);
@@ -251,7 +260,9 @@ const Index = () => {
                 <TableHead className="font-semibold min-w-[130px]">Symbol</TableHead>
                 <TableHead className="font-semibold min-w-[200px]">Opis</TableHead>
                 <TableHead className="font-semibold text-right min-w-[80px]">Ilość</TableHead>
-                <TableHead className="font-semibold text-right min-w-[110px]">Cena</TableHead>
+                <TableHead className="font-semibold text-right min-w-[120px]">Cena Zlecenie</TableHead>
+                <TableHead className="font-semibold text-right min-w-[120px]">Cena Katalog</TableHead>
+                <TableHead className="font-semibold text-right min-w-[90px]">Różnica</TableHead>
                 <TableHead className="font-semibold text-center min-w-[70px]">Prodio</TableHead>
               </TableRow>
             </TableHeader>
@@ -259,7 +270,7 @@ const Index = () => {
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
+                    {Array.from({ length: 10 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -268,7 +279,7 @@ const Index = () => {
                 ))
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                     Brak wyników. Zmień kryteria wyszukiwania.
                   </TableCell>
                 </TableRow>
@@ -287,7 +298,17 @@ const Index = () => {
                       {row.product_description}
                     </TableCell>
                     <TableCell className="text-right">{row.quantity}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(row.price)}</TableCell>
+                    <TableCell className="text-right font-medium">{formatPrice(row.price, row.currency)}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      {row.current_price != null ? formatPrice(row.current_price, row.currency) : <span className="text-muted-foreground">BRAK</span>}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {(() => {
+                        const diff = calcDiscount(row.current_price, row.price);
+                        if (diff == null) return <span className="text-muted-foreground">—</span>;
+                        return <span className={diff > 0 ? "text-green-600" : ""}>{diff.toFixed(1)}%</span>;
+                      })()}
+                    </TableCell>
                     <TableCell className="text-center">
                       <TooltipProvider delayDuration={200}>
                         <Tooltip>
