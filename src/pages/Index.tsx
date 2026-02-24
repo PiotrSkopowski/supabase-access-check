@@ -267,7 +267,7 @@ const Index = () => {
                         <TooltipTrigger asChild>
                           {hasProdioLink(row) ? (
                             <a
-                              href={`https://app.prodio.pl/products/view/${row.product_id}`}
+                              href={`https://toptech.getprodio.com/product/${row.product_id}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center justify-center h-8 w-8 rounded-md text-primary hover:bg-accent transition-colors"
