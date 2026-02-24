@@ -75,58 +75,82 @@ const Index = () => {
   // All fetched rows (before text filter)
   const [allRows, setAllRows] = useState<ResultRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
 
-  // Fetch results from Supabase (filtered only by dropdowns)
+  // Fetch results: separate queries, client-side join
   const fetchResults = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
 
-    let query = supabase
-      .from("order_history")
-      .select(
-        "id, order_date, price, quantity, currency, product_id, customer_id, products(name, description, group_id, prodio_id, current_price, currency, product_groups(name)), customers(name)"
-      );
+    try {
+      // 1) Fetch order_history (flat, no joins)
+      let orderQuery = supabase
+        .from("order_history")
+        .select("id, order_date, price, quantity, currency, product_id, customer_id, product_name")
+        .order("order_date", { ascending: false })
+        .limit(50000);
 
-    if (selectedProductId) {
-      query = query.eq("product_id", selectedProductId);
-    }
-    if (selectedCustomerId) {
-      query = query.eq("customer_id", selectedCustomerId);
-    }
-    if (selectedGroupId) {
-      query = query.eq("products.group_id", selectedGroupId);
-    }
+      if (selectedProductId) {
+        orderQuery = orderQuery.eq("product_id", selectedProductId);
+      }
+      if (selectedCustomerId) {
+        orderQuery = orderQuery.eq("customer_id", selectedCustomerId);
+      }
 
-    query = query.order("order_date", { ascending: false }).limit(50000);
+      const [ordersRes, productsRes, customersRes] = await Promise.all([
+        orderQuery,
+        supabase.from("products").select("id, name, description, group_id, prodio_id, current_price, currency, product_groups(name)"),
+        supabase.from("customers").select("id, name"),
+      ]);
 
-    const { data, error } = await query;
+      if (ordersRes.error) {
+        setFetchError(`order_history: ${ordersRes.error.message}`);
+        setAllRows([]);
+        setLoading(false);
+        return;
+      }
 
-    if (error) {
-      console.error("Fetch error:", error);
+      // Build lookup maps
+      const productMap = new Map<string, any>();
+      (productsRes.data ?? []).forEach((p: any) => productMap.set(p.id, p));
+
+      const customerMap = new Map<string, string>();
+      (customersRes.data ?? []).forEach((c: any) => customerMap.set(c.id, c.name));
+
+      const mapped: ResultRow[] = (ordersRes.data ?? []).map((row: any) => {
+        const product = row.product_id ? productMap.get(row.product_id) : null;
+        return {
+          id: row.id,
+          order_date: row.order_date ?? "",
+          customer_name: row.customer_id ? (customerMap.get(row.customer_id) ?? "—") : "—",
+          customer_id: row.customer_id,
+          group_name: product?.product_groups?.name ?? "—",
+          group_id: product?.group_id ?? null,
+          product_name: product?.name ?? row.product_name ?? "—",
+          product_description: product?.description ?? "",
+          product_id: row.product_id,
+          prodio_id: product?.prodio_id ?? null,
+          quantity: row.quantity,
+          price: row.price,
+          currency: row.currency ?? "PLN",
+          current_price: product?.current_price ?? null,
+          product_currency: product?.currency ?? "PLN",
+        };
+      });
+
+      // Client-side group filter
+      const finalRows = selectedGroupId
+        ? mapped.filter((r) => r.group_id != null && String(r.group_id) === String(selectedGroupId))
+        : mapped;
+
+      setAllRows(finalRows);
+      setFetchError(ordersRes.data?.length === 0 ? `Zapytanie zwróciło 0 rekordów z order_history.` : null);
+    } catch (err: any) {
+      setFetchError(`Unexpected: ${err.message}`);
       setAllRows([]);
-      setLoading(false);
-      return;
     }
 
-    const mapped: ResultRow[] = (data ?? []).map((row: any) => ({
-      id: row.id,
-      order_date: row.order_date ?? "",
-      customer_name: row.customers?.name ?? "—",
-      customer_id: row.customer_id,
-      group_name: row.products?.product_groups?.name ?? "—",
-      group_id: row.products?.group_id,
-      product_name: row.products?.name ?? "—",
-      product_description: row.products?.description ?? "",
-      product_id: row.product_id,
-      prodio_id: row.products?.prodio_id ?? null,
-      quantity: row.quantity,
-      price: row.price,
-      currency: row.currency ?? "PLN",
-      current_price: row.products?.current_price ?? null,
-      product_currency: row.products?.currency ?? "PLN",
-    }));
-
-    setAllRows(mapped);
     setLoading(false);
   }, [selectedProductId, selectedCustomerId, selectedGroupId]);
 
@@ -281,7 +305,14 @@ const Index = () => {
               ) : rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
-                    Brak wyników. Zmień kryteria wyszukiwania.
+                    {fetchError ? (
+                      <div>
+                        <p className="font-medium text-destructive">Błąd pobierania danych</p>
+                        <p className="text-sm mt-1">{fetchError}</p>
+                      </div>
+                    ) : (
+                      "Brak wyników. Zmień kryteria wyszukiwania."
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (
