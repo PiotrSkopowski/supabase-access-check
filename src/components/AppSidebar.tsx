@@ -1,5 +1,7 @@
-import { BarChart3, Home, Package, Users, Settings } from "lucide-react";
+import { BarChart3, Home, Package, Users, Settings, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -22,6 +24,14 @@ const mgmtItems = [
 ];
 
 export function AppSidebar() {
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login');
+  };
+
   return (
     <Sidebar>
       <SidebarContent>
@@ -69,6 +79,16 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <div className="mt-auto px-4 py-4">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm w-full transition-colors text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            <span>Wyloguj</span>
+          </button>
+        </div>
       </SidebarContent>
     </Sidebar>
   );
