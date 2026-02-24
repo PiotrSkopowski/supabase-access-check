@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -26,6 +25,7 @@ interface OrderRow {
   quantity: number | null;
   order_date: string | null;
   group_name?: string | null;
+  product_id?: string | null;
 }
 
 interface ProductCatalog {
@@ -47,7 +47,6 @@ const formatPrice = (val: number, currency?: string | null) =>
   `${val.toFixed(2)} ${currency || "PLN"}`;
 
 const Index = () => {
-  const navigate = useNavigate();
   const [allRows, setAllRows] = useState<ResultRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +101,6 @@ const Index = () => {
     load();
   }, []);
 
-  // Extract unique filter options from data
   const filterOptions = useMemo(() => {
     const clientSet = new Set<string>();
     const productSet = new Set<string>();
@@ -119,7 +117,6 @@ const Index = () => {
     };
   }, [allRows]);
 
-  // Apply filters
   const filteredRows = useMemo(() => {
     const s = filters.search.toLowerCase();
     return allRows.filter((r) => {
@@ -137,7 +134,6 @@ const Index = () => {
     });
   }, [allRows, filters]);
 
-  // Reset page when filters change
   useEffect(() => { setPage(0); }, [filters]);
 
   const totalPages = Math.ceil(filteredRows.length / PAGE_SIZE);
@@ -168,6 +164,8 @@ const Index = () => {
     return <Badge variant="secondary" className="text-muted-foreground">0%</Badge>;
   };
 
+  const hasProdioLink = (row: ResultRow) => !!row.product_id;
+
   return (
     <div className="max-w-[1400px] mx-auto space-y-6">
       <div>
@@ -185,7 +183,6 @@ const Index = () => {
         </div>
       )}
 
-      {/* Filters */}
       <OrderFilters
         filters={filters}
         onChange={setFilters}
@@ -207,7 +204,7 @@ const Index = () => {
                 <TableHead className="font-semibold text-right">Cena Zlecenia</TableHead>
                 <TableHead className="font-semibold text-right">Cena Katalogowa</TableHead>
                 <TableHead className="font-semibold text-right">Różnica</TableHead>
-                <TableHead className="font-semibold w-16 text-center">Akcje</TableHead>
+                <TableHead className="font-semibold w-20 text-center">PRODIO</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -268,22 +265,23 @@ const Index = () => {
                     <TableCell className="text-center">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className={`h-8 w-8 ${row.product_matched ? "text-primary hover:text-primary" : "text-muted-foreground/40 cursor-default"}`}
-                            disabled={!row.product_matched}
-                            onClick={() => {
-                              if (row.product_matched) {
-                                navigate(`/product/${encodeURIComponent(row.product_name || "")}`);
-                              }
-                            }}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                          {hasProdioLink(row) ? (
+                            <a
+                              href={`https://app.prodio.pl/products/view/${row.product_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center h-8 w-8 rounded-md text-primary hover:bg-accent transition-colors"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </a>
+                          ) : (
+                            <span className="inline-flex items-center justify-center h-8 w-8 text-muted-foreground/40 cursor-default">
+                              <Eye className="h-4 w-4" />
+                            </span>
+                          )}
                         </TooltipTrigger>
                         <TooltipContent>
-                          {row.product_matched ? "Szczegóły produktu" : "Produkt nie znaleziony w katalogu"}
+                          {hasProdioLink(row) ? "Otwórz kartę produktu w Prodio" : "Brak powiązania z Prodio"}
                         </TooltipContent>
                       </Tooltip>
                     </TableCell>
@@ -294,7 +292,6 @@ const Index = () => {
           </Table>
         </div>
 
-        {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t px-4 py-3">
             <p className="text-sm text-muted-foreground">
