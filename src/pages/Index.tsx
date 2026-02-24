@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { Search, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Loader2, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { supabase } from "@/lib/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ interface ResultRow {
   product_name: string;
   product_description: string;
   product_id: string;
+  prodio_id: string | null;
   quantity: number;
   price: number;
 }
@@ -74,7 +76,7 @@ const Index = () => {
     let query = supabase
       .from("order_history")
       .select(
-        "id, order_date, price, quantity, product_id, customer_id, products!inner(name, description, group_id, product_groups(name)), customers!inner(name)"
+        "id, order_date, price, quantity, product_id, customer_id, products!inner(name, description, group_id, prodio_id, product_groups(name)), customers!inner(name)"
       );
 
     if (selectedProductId) {
@@ -108,6 +110,7 @@ const Index = () => {
       product_name: row.products?.name ?? "—",
       product_description: row.products?.description ?? "",
       product_id: row.product_id,
+      prodio_id: row.products?.prodio_id ?? null,
       quantity: row.quantity,
       price: row.price,
     }));
@@ -249,13 +252,14 @@ const Index = () => {
                 <TableHead className="font-semibold min-w-[200px]">Opis</TableHead>
                 <TableHead className="font-semibold text-right min-w-[80px]">Ilość</TableHead>
                 <TableHead className="font-semibold text-right min-w-[110px]">Cena</TableHead>
+                <TableHead className="font-semibold text-center min-w-[70px]">Prodio</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -264,7 +268,7 @@ const Index = () => {
                 ))
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                     Brak wyników. Zmień kryteria wyszukiwania.
                   </TableCell>
                 </TableRow>
@@ -284,6 +288,31 @@ const Index = () => {
                     </TableCell>
                     <TableCell className="text-right">{row.quantity}</TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(row.price)}</TableCell>
+                    <TableCell className="text-center">
+                      <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            {row.prodio_id ? (
+                              <a
+                                href={`https://toptech.getprodio.com/product/${row.prodio_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center"
+                              >
+                                <Eye className="h-4 w-4 text-primary" />
+                              </a>
+                            ) : (
+                              <span className="inline-flex items-center justify-center cursor-default">
+                                <Eye className="h-4 w-4 text-muted-foreground/40" />
+                              </span>
+                            )}
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {row.prodio_id ? "Otwórz kartę produktu w Prodio" : "Brak powiązania z Prodio"}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
