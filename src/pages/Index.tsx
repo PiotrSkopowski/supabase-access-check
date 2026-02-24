@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Search, Loader2, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { Search, Loader2, ChevronLeft, ChevronRight, Eye, AlertTriangle } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { supabase } from "@/lib/supabase";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,7 @@ interface ResultRow {
   customer_name: string;
   customer_id: string | number;
   group_name: string;
-  group_id: string | number;
+  group_id: string | number | null;
   product_name: string;
   product_description: string;
   product_id: string;
@@ -40,6 +40,7 @@ interface ResultRow {
   currency: string;
   current_price: number | null;
   product_currency: string;
+  product_matched: boolean;
 }
 
 interface Product {
@@ -111,15 +112,22 @@ const Index = () => {
         return;
       }
 
-      // Build lookup maps
-      const productMap = new Map<string, any>();
-      (productsRes.data ?? []).forEach((p: any) => productMap.set(p.id, p));
+      // Build lookup maps - keyed by trimmed lowercase name for matching
+      const productByName = new Map<string, any>();
+      (productsRes.data ?? []).forEach((p: any) => {
+        const key = (p.name ?? "").trim().toLowerCase();
+        if (key) productByName.set(key, p);
+      });
 
       const customerMap = new Map<string, string>();
       (customersRes.data ?? []).forEach((c: any) => customerMap.set(c.id, c.name));
 
       const mapped: ResultRow[] = (ordersRes.data ?? []).map((row: any) => {
-        const product = row.product_id ? productMap.get(row.product_id) : null;
+        const orderProductName = (row.product_name ?? "").trim();
+        const matchKey = orderProductName.toLowerCase();
+        const product = matchKey ? productByName.get(matchKey) : null;
+        const matched = product != null;
+
         return {
           id: row.id,
           order_date: row.order_date ?? "",
@@ -127,7 +135,7 @@ const Index = () => {
           customer_id: row.customer_id,
           group_name: product?.product_groups?.name ?? "—",
           group_id: product?.group_id ?? null,
-          product_name: product?.name ?? row.product_name ?? "—",
+          product_name: orderProductName || "—",
           product_description: product?.description ?? "",
           product_id: row.product_id,
           prodio_id: product?.prodio_id ?? null,
@@ -136,6 +144,7 @@ const Index = () => {
           currency: row.currency ?? "PLN",
           current_price: product?.current_price ?? null,
           product_currency: product?.currency ?? "PLN",
+          product_matched: matched,
         };
       });
 
@@ -330,7 +339,19 @@ const Index = () => {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{row.product_name}</div>
+                        <div className="font-medium flex items-center gap-1.5">
+                          {row.product_name}
+                          {!row.product_matched && (
+                            <TooltipProvider delayDuration={200}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <AlertTriangle className="h-3.5 w-3.5 text-destructive inline-block shrink-0" />
+                                </TooltipTrigger>
+                                <TooltipContent>Brak dopasowania w katalogu produktów</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
                         {row.product_description && (
                           <div className="text-xs text-muted-foreground mt-0.5 max-w-[300px] truncate">
                             {row.product_description}
@@ -340,7 +361,7 @@ const Index = () => {
                       <TableCell className="text-right">{row.quantity}</TableCell>
                       <TableCell className="text-right font-medium">{formatPrice(row.price, row.currency)}</TableCell>
                       <TableCell className="text-right font-medium">
-                        {row.current_price != null ? formatPrice(row.current_price, row.product_currency) : <span className="text-muted-foreground">BRAK</span>}
+                        {row.current_price != null ? formatPrice(row.current_price, row.product_currency) : <span className="text-muted-foreground">Brak w cenniku</span>}
                       </TableCell>
                       <TableCell className="text-right font-medium">
                         {currencyMismatch ? (
