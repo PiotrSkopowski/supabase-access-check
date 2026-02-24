@@ -28,10 +28,6 @@ interface OrderRow {
   product_id?: string | null;
 }
 
-interface ProductCatalog {
-  name: string;
-  current_price: number | null;
-}
 
 interface ResultRow extends OrderRow {
   catalog_price: number | null;
@@ -58,9 +54,10 @@ const Index = () => {
       setLoading(true);
       setError(null);
 
-      const [ordersRes, productsRes] = await Promise.all([
+      const [ordersRes, productsRes, groupsRes] = await Promise.all([
         supabase.from("order_history").select("*").order("order_date", { ascending: false }),
-        supabase.from("products").select("name, current_price"),
+        supabase.from("products").select("name, current_price, group_id"),
+        supabase.from("product_groups").select("id, name"),
       ]);
 
       if (ordersRes.error) {
@@ -77,10 +74,22 @@ const Index = () => {
         return;
       }
 
-      const productMap = new Map<string, ProductCatalog>();
+      const groupMap = new Map<string, string>();
+      if (groupsRes.data) {
+        for (const g of groupsRes.data) {
+          if (g.id && g.name) groupMap.set(g.id, g.name);
+        }
+      }
+
+      const productMap = new Map<string, { current_price: number | null; group_name: string | null }>();
       if (productsRes.data) {
         for (const p of productsRes.data) {
-          if (p.name) productMap.set(p.name.trim().toLowerCase(), p);
+          if (p.name) {
+            productMap.set(p.name.trim().toLowerCase(), {
+              current_price: p.current_price,
+              group_name: p.group_id ? (groupMap.get(p.group_id) ?? null) : null,
+            });
+          }
         }
       }
 
@@ -90,6 +99,7 @@ const Index = () => {
         return {
           ...o,
           catalog_price: catalog?.current_price ?? null,
+          group_name: catalog?.group_name ?? null,
           product_matched: !!catalog,
         };
       });
@@ -198,6 +208,7 @@ const Index = () => {
               <TableRow className="bg-muted/50">
                 <TableHead className="font-semibold w-10">#</TableHead>
                 <TableHead className="font-semibold min-w-[200px]">Produkt</TableHead>
+                <TableHead className="font-semibold min-w-[140px]">Grupa Produktowa</TableHead>
                 <TableHead className="font-semibold min-w-[140px]">Klient</TableHead>
                 <TableHead className="font-semibold">Data</TableHead>
                 <TableHead className="font-semibold text-right">Ilość</TableHead>
@@ -211,14 +222,14 @@ const Index = () => {
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 9 }).map((_, j) => (
+                    {Array.from({ length: 10 }).map((_, j) => (
                       <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : pageRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                     Brak danych do wyświetlenia
                   </TableCell>
                 </TableRow>
@@ -245,6 +256,9 @@ const Index = () => {
                           {row.description}
                         </p>
                       )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {row.group_name || "—"}
                     </TableCell>
                     <TableCell className="text-sm text-foreground">
                       {row.client_name || "—"}
