@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -10,8 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Eye, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Eye, AlertTriangle, ChevronLeft, ChevronRight, Paperclip, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { OrderFilters, EMPTY_FILTERS, type FilterState } from "@/components/OrderFilters";
+import { toast } from "sonner";
 
 const PAGE_SIZE = 20;
 
@@ -28,11 +29,14 @@ interface OrderRow {
   product_id?: string | null;
 }
 
-
 interface ResultRow extends OrderRow {
   catalog_price: number | null;
   product_matched: boolean;
+  sciezka_z: string | null;
 }
+
+type SortKey = "product_name" | "group_name" | "client_name" | "order_date" | "quantity" | "price" | "catalog_price" | "diff" | "prodio" | "plik";
+type SortDir = "asc" | "desc";
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("pl-PL", {
@@ -42,12 +46,19 @@ const formatDate = (iso: string) =>
 const formatPrice = (val: number, currency?: string | null) =>
   `${val.toFixed(2)} ${currency || "PLN"}`;
 
+const getDiff = (row: ResultRow): number | null => {
+  if (row.price == null || row.catalog_price == null || row.catalog_price === 0) return null;
+  return ((row.price - row.catalog_price) / row.catalog_price) * 100;
+};
+
 const Index = () => {
   const [allRows, setAllRows] = useState<ResultRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   useEffect(() => {
     const load = async () => {
@@ -56,7 +67,7 @@ const Index = () => {
 
       const [ordersRes, productsRes, groupsRes] = await Promise.all([
         supabase.from("order_history").select("*").order("order_date", { ascending: false }),
-        supabase.from("products").select("name, current_price, group_id"),
+        supabase.from("products").select("name, current_price, group_id, sciezka_z"),
         supabase.from("product_groups").select("id, name"),
       ]);
 
@@ -81,13 +92,14 @@ const Index = () => {
         }
       }
 
-      const productMap = new Map<string, { current_price: number | null; group_name: string | null }>();
+      const productMap = new Map<string, { current_price: number | null; group_name: string | null; sciezka_z: string | null }>();
       if (productsRes.data) {
         for (const p of productsRes.data) {
           if (p.name) {
             productMap.set(p.name.trim().toLowerCase(), {
               current_price: p.current_price,
               group_name: p.group_id ? (groupMap.get(p.group_id) ?? null) : null,
+              sciezka_z: p.sciezka_z ?? null,
             });
           }
         }
@@ -101,6 +113,7 @@ const Index = () => {
           catalog_price: catalog?.current_price ?? null,
           group_name: catalog?.group_name ?? null,
           product_matched: !!catalog,
+          sciezka_z: catalog?.sciezka_z ?? null,
         };
       });
 
@@ -144,18 +157,102 @@ const Index = () => {
     });
   }, [allRows, filters]);
 
-  useEffect(() => { setPage(0); }, [filters]);
+  const sortedRows = useMemo(() => {
+    if (!sortKey) return filteredRows;
 
-  const totalPages = Math.ceil(filteredRows.length / PAGE_SIZE);
+    const sorted = [...filteredRows].sort((a, b) => {
+      let valA: any;
+      let valB: any;
+
+      switch (sortKey) {
+        case "product_name":
+          valA = a.product_name?.toLowerCase() ?? "";
+          valB = b.product_name?.toLowerCase() ?? "";
+          break;
+        case "group_name":
+          valA = a.group_name?.toLowerCase() ?? "";
+          valB = b.group_name?.toLowerCase() ?? "";
+          break;
+        case "client_name":
+          valA = a.client_name?.toLowerCase() ?? "";
+          valB = b.client_name?.toLowerCase() ?? "";
+          break;
+        case "order_date":
+          valA = a.order_date ?? "";
+          valB = b.order_date ?? "";
+          break;
+        case "quantity":
+          valA = a.quantity ?? 0;
+          valB = b.quantity ?? 0;
+          break;
+        case "price":
+          valA = a.price ?? 0;
+          valB = b.price ?? 0;
+          break;
+        case "catalog_price":
+          valA = a.catalog_price ?? 0;
+          valB = b.catalog_price ?? 0;
+          break;
+        case "diff":
+          valA = getDiff(a) ?? -Infinity;
+          valB = getDiff(b) ?? -Infinity;
+          break;
+        case "prodio":
+          valA = a.product_id ? 1 : 0;
+          valB = b.product_id ? 1 : 0;
+          break;
+        case "plik":
+          valA = a.sciezka_z ? 1 : 0;
+          valB = b.sciezka_z ? 1 : 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (valA < valB) return sortDir === "asc" ? -1 : 1;
+      if (valA > valB) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return sorted;
+  }, [filteredRows, sortKey, sortDir]);
+
+  useEffect(() => { setPage(0); }, [filters, sortKey, sortDir]);
+
+  const totalPages = Math.ceil(sortedRows.length / PAGE_SIZE);
   const pageRows = useMemo(
-    () => filteredRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
-    [filteredRows, page],
+    () => sortedRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [sortedRows, page],
   );
 
-  const renderDiff = (row: ResultRow) => {
-    if (row.price == null || row.catalog_price == null || row.catalog_price === 0) return "—";
+  const handleSort = useCallback((key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }, [sortKey]);
 
-    const diff = ((row.price - row.catalog_price) / row.catalog_price) * 100;
+  const SortIcon = ({ column }: { column: SortKey }) => {
+    if (sortKey !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+    return sortDir === "asc"
+      ? <ArrowUp className="h-3 w-3 ml-1 text-primary" />
+      : <ArrowDown className="h-3 w-3 ml-1 text-primary" />;
+  };
+
+  const handleCopyPath = async (path: string) => {
+    try {
+      await navigator.clipboard.writeText(path);
+      toast.success("Ścieżka została skopiowana do schowka");
+    } catch {
+      toast.error("Nie udało się skopiować ścieżki");
+    }
+  };
+
+  const renderDiff = (row: ResultRow) => {
+    const diff = getDiff(row);
+    if (diff == null) return "—";
 
     if (diff > 0) {
       return (
@@ -207,29 +304,50 @@ const Index = () => {
             <TableHeader>
               <TableRow className="bg-muted/50">
                 <TableHead className="font-semibold w-10">#</TableHead>
-                <TableHead className="font-semibold min-w-[200px]">Produkt</TableHead>
-                <TableHead className="font-semibold min-w-[140px]">Grupa Produktowa</TableHead>
-                <TableHead className="font-semibold min-w-[140px]">Klient</TableHead>
-                <TableHead className="font-semibold">Data</TableHead>
-                <TableHead className="font-semibold text-right">Ilość</TableHead>
-                <TableHead className="font-semibold text-right">Cena Zlecenia</TableHead>
-                <TableHead className="font-semibold text-right">Cena Katalogowa</TableHead>
-                <TableHead className="font-semibold text-right">Różnica</TableHead>
-                <TableHead className="font-semibold w-20 text-center">PRODIO</TableHead>
+                <TableHead className="font-semibold min-w-[200px] cursor-pointer select-none" onClick={() => handleSort("product_name")}>
+                  <span className="inline-flex items-center">Produkt <SortIcon column="product_name" /></span>
+                </TableHead>
+                <TableHead className="font-semibold min-w-[140px] cursor-pointer select-none" onClick={() => handleSort("group_name")}>
+                  <span className="inline-flex items-center">Grupa Produktowa <SortIcon column="group_name" /></span>
+                </TableHead>
+                <TableHead className="font-semibold min-w-[140px] cursor-pointer select-none" onClick={() => handleSort("client_name")}>
+                  <span className="inline-flex items-center">Klient <SortIcon column="client_name" /></span>
+                </TableHead>
+                <TableHead className="font-semibold cursor-pointer select-none" onClick={() => handleSort("order_date")}>
+                  <span className="inline-flex items-center">Data <SortIcon column="order_date" /></span>
+                </TableHead>
+                <TableHead className="font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("quantity")}>
+                  <span className="inline-flex items-center justify-end">Ilość <SortIcon column="quantity" /></span>
+                </TableHead>
+                <TableHead className="font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("price")}>
+                  <span className="inline-flex items-center justify-end">Cena Zlecenia <SortIcon column="price" /></span>
+                </TableHead>
+                <TableHead className="font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("catalog_price")}>
+                  <span className="inline-flex items-center justify-end">Cena Katalogowa <SortIcon column="catalog_price" /></span>
+                </TableHead>
+                <TableHead className="font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("diff")}>
+                  <span className="inline-flex items-center justify-end">Różnica <SortIcon column="diff" /></span>
+                </TableHead>
+                <TableHead className="font-semibold w-20 text-center cursor-pointer select-none" onClick={() => handleSort("prodio")}>
+                  <span className="inline-flex items-center justify-center">PRODIO <SortIcon column="prodio" /></span>
+                </TableHead>
+                <TableHead className="font-semibold w-20 text-center cursor-pointer select-none" onClick={() => handleSort("plik")}>
+                  <span className="inline-flex items-center justify-center">PLIK <SortIcon column="plik" /></span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 10 }).map((_, j) => (
+                    {Array.from({ length: 11 }).map((_, j) => (
                       <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : pageRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
                     Brak danych do wyświetlenia
                   </TableCell>
                 </TableRow>
@@ -299,6 +417,27 @@ const Index = () => {
                         </TooltipContent>
                       </Tooltip>
                     </TableCell>
+                    <TableCell className="text-center">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          {row.sciezka_z ? (
+                            <button
+                              onClick={() => handleCopyPath(row.sciezka_z!)}
+                              className="inline-flex items-center justify-center h-8 w-8 rounded-md text-primary hover:bg-accent transition-colors"
+                            >
+                              <Paperclip className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center justify-center h-8 w-8 text-muted-foreground/40 cursor-default">
+                              <Paperclip className="h-4 w-4" />
+                            </span>
+                          )}
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {row.sciezka_z ? "Kopiuj ścieżkę do schowka" : "Brak ścieżki pliku"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -309,7 +448,7 @@ const Index = () => {
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t px-4 py-3">
             <p className="text-sm text-muted-foreground">
-              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filteredRows.length)} z {filteredRows.length}
+              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, sortedRows.length)} z {sortedRows.length}
             </p>
             <div className="flex items-center gap-1">
               <Button
