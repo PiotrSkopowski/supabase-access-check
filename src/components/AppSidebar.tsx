@@ -2,6 +2,7 @@ import { BarChart3, Home, Package, Users, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import toptechLogo from "@/assets/toptech-logo.svg";
 import {
   Sidebar,
   SidebarContent,
@@ -37,10 +38,12 @@ export function AppSidebar() {
       <SidebarContent>
         {/* TOPTECH Logo */}
         <div className="px-5 py-6 border-b border-sidebar-border">
-          <h2 className="text-xl font-extrabold tracking-tight text-white">
-            TOPTECH<span className="text-sidebar-primary">®</span>
-          </h2>
-          <p className="text-[11px] text-sidebar-foreground/50 mt-0.5 tracking-wide uppercase">
+          <img
+            src={toptechLogo}
+            alt="TOPTECH"
+            className="h-8 w-auto brightness-0 invert"
+          />
+          <p className="text-[11px] text-sidebar-foreground/50 mt-2 tracking-wide uppercase">
             System Wycen ERP
           </p>
         </div>

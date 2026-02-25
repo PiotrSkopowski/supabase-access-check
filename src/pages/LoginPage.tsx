@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/hooks/use-toast';
 import { Loader2, Lock, Mail } from 'lucide-react';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import toptechLogo from '@/assets/toptech-logo.svg';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -40,46 +42,53 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-[hsl(222,47%,6%)]">
-      <div className="w-full max-w-md rounded-2xl p-8 shadow-2xl border border-white/[0.08] bg-[hsl(222,40%,10%)]">
-        {/* TOPTECH Logo */}
+    <div className="min-h-screen flex items-center justify-center px-4 bg-background">
+      {/* Theme toggle top-right */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+
+      <div className="w-full max-w-md rounded-2xl p-8 shadow-2xl border border-border bg-card">
+        {/* Logo */}
         <div className="flex justify-center mb-8">
-          <h1 className="text-3xl font-extrabold tracking-tight text-white">
-            TOPTECH<span className="text-[hsl(217,91%,60%)]">®</span>
-          </h1>
+          <img
+            src={toptechLogo}
+            alt="TOPTECH"
+            className="h-9 w-auto dark:brightness-0 dark:invert"
+          />
         </div>
 
-        <p className="text-center mb-8 text-[hsl(215,20%,65%)] text-sm">
+        <p className="text-center mb-8 text-muted-foreground text-sm">
           Zaloguj się do Systemu Wycen
         </p>
 
         <form onSubmit={handleLogin} className="space-y-5">
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-[hsl(215,20%,80%)]">Email</label>
+            <label className="text-sm font-medium text-foreground">Email</label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(215,15%,40%)]" />
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="jan@toptech.pl"
                 required
-                className="w-full rounded-lg pl-10 pr-4 py-3 text-sm text-white placeholder:text-[hsl(215,15%,35%)] outline-none transition-all border border-white/10 bg-[hsl(222,47%,6%)] focus:border-[hsl(217,91%,50%)] focus:ring-2 focus:ring-[hsl(217,91%,50%)]/30"
+                className="w-full rounded-lg pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-all border border-input bg-background focus:border-primary focus:ring-2 focus:ring-primary/30"
               />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-[hsl(215,20%,80%)]">Hasło</label>
+            <label className="text-sm font-medium text-foreground">Hasło</label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(215,15%,40%)]" />
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full rounded-lg pl-10 pr-4 py-3 text-sm text-white placeholder:text-[hsl(215,15%,35%)] outline-none transition-all border border-white/10 bg-[hsl(222,47%,6%)] focus:border-[hsl(217,91%,50%)] focus:ring-2 focus:ring-[hsl(217,91%,50%)]/30"
+                className="w-full rounded-lg pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-all border border-input bg-background focus:border-primary focus:ring-2 focus:ring-primary/30"
               />
             </div>
           </div>
@@ -87,7 +96,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-lg text-white font-semibold text-sm transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 bg-gradient-to-r from-[hsl(217,91%,50%)] to-[hsl(217,91%,45%)]"
+            className="w-full py-3 rounded-lg text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 bg-primary"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             Zaloguj się
@@ -98,7 +107,7 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={handleForgotPassword}
-            className="text-sm text-[hsl(215,15%,40%)] hover:text-[hsl(217,91%,60%)] transition-colors"
+            className="text-sm text-muted-foreground hover:text-primary transition-colors"
           >
             Zapomniałeś hasła?
           </button>
