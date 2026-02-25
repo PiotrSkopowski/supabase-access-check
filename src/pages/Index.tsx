@@ -235,7 +235,7 @@ const Index = () => {
                 </TableRow>
               ) : (
                 pageRows.map((row, i) => (
-                  <TableRow key={row.id || i}>
+                  <TableRow key={row.id || i} className="hover:bg-muted/50 transition-colors">
                     <TableCell className="text-muted-foreground text-xs">
                       {page * PAGE_SIZE + i + 1}
                     </TableCell>
