@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Eye, AlertTriangle, ChevronLeft, ChevronRight, Paperclip, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { OrderFilters, EMPTY_FILTERS, type FilterState } from "@/components/OrderFilters";
+import { SalesOpportunityCell, type SalesOpportunity } from "@/components/SalesOpportunityCell";
 import { toast } from "sonner";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
@@ -44,7 +45,7 @@ interface ResultRow extends OrderRow {
   sciezka_z: string | null;
 }
 
-type SortKey = "product_name" | "group_name" | "client_name" | "order_date" | "quantity" | "price" | "catalog_price" | "diff" | "prodio" | "plik";
+type SortKey = "product_name" | "group_name" | "client_name" | "order_date" | "quantity" | "price" | "catalog_price" | "diff" | "szansa" | "prodio" | "plik";
 type SortDir = "asc" | "desc";
 
 const formatDate = (iso: string) =>
@@ -60,8 +61,19 @@ const getDiff = (row: ResultRow): number | null => {
   return ((row.price - row.catalog_price) / row.catalog_price) * 100;
 };
 
+// Fuzzy client match: one contains the other (case-insensitive)
+const fuzzyClientMatch = (a: string, b: string): boolean => {
+  const la = a.toLowerCase();
+  const lb = b.toLowerCase();
+  return la.includes(lb) || lb.includes(la);
+};
+
+// Build lookup key: product (lowercase trimmed)
+const makeProductKey = (name: string) => name.trim().toLowerCase();
+
 const Index = () => {
   const [allRows, setAllRows] = useState<ResultRow[]>([]);
+  const [salesOpps, setSalesOpps] = useState<SalesOpportunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -75,10 +87,11 @@ const Index = () => {
       setLoading(true);
       setError(null);
 
-      const [ordersRes, productsRes, groupsRes] = await Promise.all([
+      const [ordersRes, productsRes, groupsRes, oppsRes] = await Promise.all([
         supabase.from("order_history").select("*").order("order_date", { ascending: false }),
         supabase.from("products").select("name, current_price, group_id, sciezka_z"),
         supabase.from("product_groups").select("id, name"),
+        supabase.from("sales_opportunities").select("client_name, opportunity_date, product_name, unit_price, quantity").gt("unit_price", 0).not("unit_price", "is", null).order("opportunity_date", { ascending: false }),
       ]);
 
       if (ordersRes.error) {
@@ -93,6 +106,11 @@ const Index = () => {
         setAllRows([]);
         setLoading(false);
         return;
+      }
+
+      // Store sales opportunities
+      if (oppsRes.data) {
+        setSalesOpps(oppsRes.data as SalesOpportunity[]);
       }
 
       const groupMap = new Map<string, string>();
@@ -134,6 +152,27 @@ const Index = () => {
     load();
   }, []);
 
+  // Pre-index sales opportunities by product name for fast lookup
+  const oppsByProduct = useMemo(() => {
+    const map = new Map<string, SalesOpportunity[]>();
+    for (const o of salesOpps) {
+      if (!o.product_name) continue;
+      const key = makeProductKey(o.product_name);
+      let arr = map.get(key);
+      if (!arr) { arr = []; map.set(key, arr); }
+      arr.push(o);
+    }
+    return map;
+  }, [salesOpps]);
+
+  const getOpportunitiesForRow = useCallback((row: ResultRow): SalesOpportunity[] => {
+    if (!row.product_name || !row.client_name) return [];
+    const key = makeProductKey(row.product_name);
+    const candidates = oppsByProduct.get(key);
+    if (!candidates) return [];
+    return candidates.filter((o) => fuzzyClientMatch(o.client_name, row.client_name!));
+  }, [oppsByProduct]);
+
   // Cross-filtering: each filter's options are derived from rows matching the OTHER filters + global search
   const filterOptions = useMemo(() => {
     const s = filters.search.toLowerCase();
@@ -147,7 +186,6 @@ const Index = () => {
       return haystack.includes(s);
     };
 
-    // For clients: apply product, group, and search filters (but NOT client filter)
     const clientSet = new Set<string>();
     for (const r of allRows) {
       if (!r.client_name) continue;
@@ -157,7 +195,6 @@ const Index = () => {
       clientSet.add(r.client_name);
     }
 
-    // For products: apply client, group, and search filters (but NOT product filter)
     const productSet = new Set<string>();
     for (const r of allRows) {
       if (!r.product_name) continue;
@@ -167,7 +204,6 @@ const Index = () => {
       productSet.add(r.product_name);
     }
 
-    // For groups: apply client, product, and search filters (but NOT group filter)
     const groupSet = new Set<string>();
     for (const r of allRows) {
       if (!r.group_name) continue;
@@ -241,6 +277,10 @@ const Index = () => {
           valA = getDiff(a) ?? -Infinity;
           valB = getDiff(b) ?? -Infinity;
           break;
+        case "szansa":
+          valA = getOpportunitiesForRow(a).length;
+          valB = getOpportunitiesForRow(b).length;
+          break;
         case "prodio":
           valA = a.product_id ? 1 : 0;
           valB = b.product_id ? 1 : 0;
@@ -259,7 +299,7 @@ const Index = () => {
     });
 
     return sorted;
-  }, [filteredRows, sortKey, sortDir]);
+  }, [filteredRows, sortKey, sortDir, getOpportunitiesForRow]);
 
   useEffect(() => { setPage(0); }, [filters, sortKey, sortDir, pageSize]);
 
@@ -323,6 +363,8 @@ const Index = () => {
 
   const hasProdioLink = (row: ResultRow) => !!row.product_id;
 
+  const COL_COUNT = 12;
+
   return (
     <div className="max-w-[1400px] mx-auto space-y-6">
       <div>
@@ -381,11 +423,20 @@ const Index = () => {
                 <TableHead className="font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("diff")}>
                   <span className="inline-flex items-center justify-end">Różnica <SortIcon column="diff" /></span>
                 </TableHead>
-                <TableHead className="font-semibold w-20 text-center cursor-pointer select-none" onClick={() => handleSort("prodio")}>
-                  <span className="inline-flex items-center justify-center">PRODIO <SortIcon column="prodio" /></span>
+                <TableHead className="font-semibold min-w-[180px] cursor-pointer select-none" onClick={() => handleSort("szansa")}>
+                  <span className="inline-flex items-center">Szansa Sprzedaży <SortIcon column="szansa" /></span>
                 </TableHead>
-                <TableHead className="font-semibold w-20 text-center cursor-pointer select-none" onClick={() => handleSort("plik")}>
-                  <span className="inline-flex items-center justify-center">PLIK <SortIcon column="plik" /></span>
+                <TableHead className="font-semibold w-[50px] max-w-[50px] text-center cursor-pointer select-none p-1" onClick={() => handleSort("prodio")}>
+                  <span className="inline-flex items-center justify-center text-xs">
+                    <Eye className="h-3.5 w-3.5" />
+                    <SortIcon column="prodio" />
+                  </span>
+                </TableHead>
+                <TableHead className="font-semibold w-[50px] max-w-[50px] text-center cursor-pointer select-none p-1" onClick={() => handleSort("plik")}>
+                  <span className="inline-flex items-center justify-center text-xs">
+                    <Paperclip className="h-3.5 w-3.5" />
+                    <SortIcon column="plik" />
+                  </span>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -393,14 +444,14 @@ const Index = () => {
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 11 }).map((_, j) => (
+                    {Array.from({ length: COL_COUNT }).map((_, j) => (
                       <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : pageRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={COL_COUNT} className="text-center py-12 text-muted-foreground">
                     Brak danych do wyświetlenia
                   </TableCell>
                 </TableRow>
@@ -447,7 +498,10 @@ const Index = () => {
                         : <span className="text-muted-foreground text-xs">Brak w katalogu</span>}
                     </TableCell>
                     <TableCell className="text-right">{renderDiff(row)}</TableCell>
-                    <TableCell className="text-center">
+                    <TableCell>
+                      <SalesOpportunityCell opportunities={getOpportunitiesForRow(row)} />
+                    </TableCell>
+                    <TableCell className="text-center p-1 w-[50px] max-w-[50px]">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           {hasProdioLink(row) ? (
@@ -455,12 +509,12 @@ const Index = () => {
                               href={`https://toptech.getprodio.com/product/${row.product_id}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center justify-center h-8 w-8 rounded-md text-primary hover:bg-accent transition-colors"
+                              className="inline-flex items-center justify-center h-7 w-7 rounded-md text-primary hover:bg-accent transition-colors"
                             >
                               <Eye className="h-4 w-4" />
                             </a>
                           ) : (
-                            <span className="inline-flex items-center justify-center h-8 w-8 text-muted-foreground/40 cursor-default">
+                            <span className="inline-flex items-center justify-center h-7 w-7 text-muted-foreground/40 cursor-default">
                               <Eye className="h-4 w-4" />
                             </span>
                           )}
@@ -470,18 +524,18 @@ const Index = () => {
                         </TooltipContent>
                       </Tooltip>
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center p-1 w-[50px] max-w-[50px]">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           {row.sciezka_z ? (
                             <button
                               onClick={() => handleCopyPath(row.sciezka_z!)}
-                              className="inline-flex items-center justify-center h-8 w-8 rounded-md text-primary hover:bg-accent transition-colors"
+                              className="inline-flex items-center justify-center h-7 w-7 rounded-md text-primary hover:bg-accent transition-colors"
                             >
                               <Paperclip className="h-4 w-4" />
                             </button>
                           ) : (
-                            <span className="inline-flex items-center justify-center h-8 w-8 text-muted-foreground/40 cursor-default">
+                            <span className="inline-flex items-center justify-center h-7 w-7 text-muted-foreground/40 cursor-default">
                               <Paperclip className="h-4 w-4" />
                             </span>
                           )}
