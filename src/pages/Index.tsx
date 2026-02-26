@@ -12,9 +12,19 @@ import {
 } from "@/components/ui/tooltip";
 import { Eye, AlertTriangle, ChevronLeft, ChevronRight, Paperclip, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { OrderFilters, EMPTY_FILTERS, type FilterState } from "@/components/OrderFilters";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+const STORAGE_KEY = "toptech-page-size";
+
+const getStoredPageSize = (): number => {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY);
+    if (v && PAGE_SIZE_OPTIONS.includes(Number(v) as any)) return Number(v);
+  } catch {}
+  return 20;
+};
 
 interface OrderRow {
   id?: string;
@@ -56,6 +66,7 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(getStoredPageSize);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -251,12 +262,18 @@ const Index = () => {
     return sorted;
   }, [filteredRows, sortKey, sortDir]);
 
-  useEffect(() => { setPage(0); }, [filters, sortKey, sortDir]);
+  useEffect(() => { setPage(0); }, [filters, sortKey, sortDir, pageSize]);
 
-  const totalPages = Math.ceil(sortedRows.length / PAGE_SIZE);
+  const handlePageSizeChange = useCallback((val: string) => {
+    const n = Number(val);
+    setPageSize(n);
+    try { localStorage.setItem(STORAGE_KEY, String(n)); } catch {}
+  }, []);
+
+  const totalPages = Math.ceil(sortedRows.length / pageSize);
   const pageRows = useMemo(
-    () => sortedRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
-    [sortedRows, page],
+    () => sortedRows.slice(page * pageSize, (page + 1) * pageSize),
+    [sortedRows, page, pageSize],
   );
 
   const handleSort = useCallback((key: SortKey) => {
@@ -324,13 +341,30 @@ const Index = () => {
         </div>
       )}
 
-      <OrderFilters
-        filters={filters}
-        onChange={setFilters}
-        clients={filterOptions.clients}
-        products={filterOptions.products}
-        groups={filterOptions.groups}
-      />
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex-1">
+          <OrderFilters
+            filters={filters}
+            onChange={setFilters}
+            clients={filterOptions.clients}
+            products={filterOptions.products}
+            groups={filterOptions.groups}
+          />
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-sm text-muted-foreground whitespace-nowrap">Wierszy:</span>
+          <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+            <SelectTrigger className="w-[70px] h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map((n) => (
+                <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       <Card className="shadow-sm overflow-hidden">
         <div className="overflow-auto">
@@ -389,7 +423,7 @@ const Index = () => {
                 pageRows.map((row, i) => (
                   <TableRow key={row.id || i} className="hover:bg-muted/50 transition-colors">
                     <TableCell className="text-muted-foreground text-xs">
-                      {page * PAGE_SIZE + i + 1}
+                      {page * pageSize + i + 1}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5">
@@ -482,7 +516,7 @@ const Index = () => {
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t px-4 py-3">
             <p className="text-sm text-muted-foreground">
-              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, sortedRows.length)} z {sortedRows.length}
+              {page * pageSize + 1}–{Math.min((page + 1) * pageSize, sortedRows.length)} z {sortedRows.length}
             </p>
             <div className="flex items-center gap-1">
               <Button
