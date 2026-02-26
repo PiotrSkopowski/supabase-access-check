@@ -1,10 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { ComboboxFilter } from "@/components/ComboboxFilter";
 
 export interface FilterState {
   search: string;
@@ -54,52 +51,29 @@ export function OrderFilters({ filters, onChange, clients, products, groups }: O
         )}
       </div>
 
-      {/* Row 2: Dropdown filters */}
+      {/* Row 2: Combobox filters */}
       <div className="flex flex-wrap gap-3">
-        <Select
+        <ComboboxFilter
           value={filters.clientName}
-          onValueChange={(v) => onChange({ ...filters, clientName: v === "__all__" ? "" : v })}
-        >
-          <SelectTrigger className="w-[220px] bg-card">
-            <SelectValue placeholder="Wszyscy klienci" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">Wszyscy klienci</SelectItem>
-            {clients.map((c) => (
-              <SelectItem key={c} value={c}>{c}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select
+          onChange={(v) => onChange({ ...filters, clientName: v })}
+          options={clients}
+          placeholder="Wszyscy klienci"
+          className="w-[220px]"
+        />
+        <ComboboxFilter
           value={filters.productName}
-          onValueChange={(v) => onChange({ ...filters, productName: v === "__all__" ? "" : v })}
-        >
-          <SelectTrigger className="w-[220px] bg-card">
-            <SelectValue placeholder="Wszystkie produkty" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">Wszystkie produkty</SelectItem>
-            {products.map((p) => (
-              <SelectItem key={p} value={p}>{p}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select
+          onChange={(v) => onChange({ ...filters, productName: v })}
+          options={products}
+          placeholder="Wszystkie produkty"
+          className="w-[220px]"
+        />
+        <ComboboxFilter
           value={filters.groupName}
-          onValueChange={(v) => onChange({ ...filters, groupName: v === "__all__" ? "" : v })}
-        >
-          <SelectTrigger className="w-[220px] bg-card">
-            <SelectValue placeholder="Wszystkie grupy" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">Wszystkie grupy</SelectItem>
-            {groups.map((g) => (
-              <SelectItem key={g} value={g}>{g}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          onChange={(v) => onChange({ ...filters, groupName: v })}
+          options={groups}
+          placeholder="Wszystkie grupy"
+          className="w-[220px]"
+        />
       </div>
     </div>
   );
