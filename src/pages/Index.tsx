@@ -69,7 +69,7 @@ const fuzzyClientMatch = (a: string, b: string): boolean => {
 };
 
 // Normalize for fuzzy matching
-const norm = (s: string) => s.trim().toLowerCase();
+const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
 
 const Index = () => {
   const [allRows, setAllRows] = useState<ResultRow[]>([]);
