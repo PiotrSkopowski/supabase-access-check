@@ -68,8 +68,8 @@ const fuzzyClientMatch = (a: string, b: string): boolean => {
   return la.includes(lb) || lb.includes(la);
 };
 
-// Build lookup key: product (lowercase trimmed)
-const makeProductKey = (name: string) => name.trim().toLowerCase();
+// Normalize for fuzzy matching
+const norm = (s: string) => s.trim().toLowerCase();
 
 const Index = () => {
   const [allRows, setAllRows] = useState<ResultRow[]>([]);
@@ -152,26 +152,24 @@ const Index = () => {
     load();
   }, []);
 
-  // Pre-index sales opportunities by product name for fast lookup
-  const oppsByProduct = useMemo(() => {
-    const map = new Map<string, SalesOpportunity[]>();
-    for (const o of salesOpps) {
-      if (!o.product_name) continue;
-      const key = makeProductKey(o.product_name);
-      let arr = map.get(key);
-      if (!arr) { arr = []; map.set(key, arr); }
-      arr.push(o);
-    }
-    return map;
-  }, [salesOpps]);
+  // Fuzzy bidirectional contains check
+  const fuzzyContains = useCallback((a: string, b: string): boolean => {
+    const na = norm(a);
+    const nb = norm(b);
+    return na.includes(nb) || nb.includes(na);
+  }, []);
 
   const getOpportunitiesForRow = useCallback((row: ResultRow): SalesOpportunity[] => {
     if (!row.product_name || !row.client_name) return [];
-    const key = makeProductKey(row.product_name);
-    const candidates = oppsByProduct.get(key);
-    if (!candidates) return [];
-    return candidates.filter((o) => fuzzyClientMatch(o.client_name, row.client_name!));
-  }, [oppsByProduct]);
+    return salesOpps.filter((o) => {
+      // Client match: bidirectional contains
+      if (!fuzzyContains(o.client_name, row.client_name!)) return false;
+      // Product match: product_name OR description (bidirectional)
+      const productNameMatch = fuzzyContains(o.product_name, row.product_name);
+      const descriptionMatch = row.description ? fuzzyContains(o.product_name, row.description) : false;
+      return productNameMatch || descriptionMatch;
+    });
+  }, [salesOpps, fuzzyContains]);
 
   // Cross-filtering: each filter's options are derived from rows matching the OTHER filters + global search
   const filterOptions = useMemo(() => {
