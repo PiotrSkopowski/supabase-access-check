@@ -275,10 +275,19 @@ const Index = () => {
           valA = getDiff(a) ?? -Infinity;
           valB = getDiff(b) ?? -Infinity;
           break;
-        case "szansa":
-          valA = getOpportunitiesForRow(a).length;
-          valB = getOpportunitiesForRow(b).length;
+        case "szansa": {
+          const oppsA = getOpportunitiesForRow(a);
+          const oppsB = getOpportunitiesForRow(b);
+          const hasA = oppsA.length > 0;
+          const hasB = oppsB.length > 0;
+          // Push empty to bottom regardless of sort direction
+          if (!hasA && !hasB) return 0;
+          if (!hasA) return 1;
+          if (!hasB) return -1;
+          valA = oppsA[0]?.unit_price ?? 0;
+          valB = oppsB[0]?.unit_price ?? 0;
           break;
+        }
         case "prodio":
           valA = a.product_id ? 1 : 0;
           valB = b.product_id ? 1 : 0;
