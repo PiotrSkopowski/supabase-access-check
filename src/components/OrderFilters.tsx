@@ -2,6 +2,7 @@ import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ComboboxFilter } from "@/components/ComboboxFilter";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export interface FilterState {
   search: string;
@@ -16,6 +17,9 @@ interface OrderFiltersProps {
   clients: string[];
   products: string[];
   groups: string[];
+  pageSize: number;
+  onPageSizeChange: (size: number) => void;
+  pageSizeOptions: readonly number[];
 }
 
 export const EMPTY_FILTERS: FilterState = {
@@ -25,7 +29,7 @@ export const EMPTY_FILTERS: FilterState = {
   groupName: "",
 };
 
-export function OrderFilters({ filters, onChange, clients, products, groups }: OrderFiltersProps) {
+export function OrderFilters({ filters, onChange, clients, products, groups, pageSize, onPageSizeChange, pageSizeOptions }: OrderFiltersProps) {
   const hasAny = filters.search || filters.clientName || filters.productName || filters.groupName;
 
   return (
@@ -51,8 +55,8 @@ export function OrderFilters({ filters, onChange, clients, products, groups }: O
         )}
       </div>
 
-      {/* Row 2: Combobox filters */}
-      <div className="flex flex-wrap gap-3">
+      {/* Row 2: Combobox filters + page size */}
+      <div className="flex flex-wrap gap-3 items-center">
         <ComboboxFilter
           value={filters.clientName}
           onChange={(v) => onChange({ ...filters, clientName: v })}
@@ -74,6 +78,19 @@ export function OrderFilters({ filters, onChange, clients, products, groups }: O
           placeholder="Wszystkie grupy"
           className="w-[220px]"
         />
+        <div className="flex items-center gap-1.5 ml-auto">
+          <span className="text-sm text-muted-foreground whitespace-nowrap">Wierszy:</span>
+          <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
+            <SelectTrigger className="w-[70px] h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {pageSizeOptions.map((n) => (
+                <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </div>
   );

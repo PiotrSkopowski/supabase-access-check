@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/tooltip";
 import { Eye, AlertTriangle, ChevronLeft, ChevronRight, Paperclip, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { OrderFilters, EMPTY_FILTERS, type FilterState } from "@/components/OrderFilters";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
@@ -341,30 +340,16 @@ const Index = () => {
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex-1">
-          <OrderFilters
-            filters={filters}
-            onChange={setFilters}
-            clients={filterOptions.clients}
-            products={filterOptions.products}
-            groups={filterOptions.groups}
-          />
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-sm text-muted-foreground whitespace-nowrap">Wierszy:</span>
-          <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
-            <SelectTrigger className="w-[70px] h-8">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <OrderFilters
+        filters={filters}
+        onChange={setFilters}
+        clients={filterOptions.clients}
+        products={filterOptions.products}
+        groups={filterOptions.groups}
+        pageSize={pageSize}
+        onPageSizeChange={(n) => handlePageSizeChange(String(n))}
+        pageSizeOptions={PAGE_SIZE_OPTIONS}
+      />
 
       <Card className="shadow-sm overflow-hidden">
         <div className="overflow-auto">
