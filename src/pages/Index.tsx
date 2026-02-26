@@ -124,21 +124,55 @@ const Index = () => {
     load();
   }, []);
 
+  // Cross-filtering: each filter's options are derived from rows matching the OTHER filters + global search
   const filterOptions = useMemo(() => {
+    const s = filters.search.toLowerCase();
+
+    const matchesSearch = (r: ResultRow) => {
+      if (!s) return true;
+      const haystack = [r.product_name, r.client_name, r.description]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(s);
+    };
+
+    // For clients: apply product, group, and search filters (but NOT client filter)
     const clientSet = new Set<string>();
+    for (const r of allRows) {
+      if (!r.client_name) continue;
+      if (filters.productName && r.product_name !== filters.productName) continue;
+      if (filters.groupName && r.group_name !== filters.groupName) continue;
+      if (!matchesSearch(r)) continue;
+      clientSet.add(r.client_name);
+    }
+
+    // For products: apply client, group, and search filters (but NOT product filter)
     const productSet = new Set<string>();
+    for (const r of allRows) {
+      if (!r.product_name) continue;
+      if (filters.clientName && r.client_name !== filters.clientName) continue;
+      if (filters.groupName && r.group_name !== filters.groupName) continue;
+      if (!matchesSearch(r)) continue;
+      productSet.add(r.product_name);
+    }
+
+    // For groups: apply client, product, and search filters (but NOT group filter)
     const groupSet = new Set<string>();
     for (const r of allRows) {
-      if (r.client_name) clientSet.add(r.client_name);
-      if (r.product_name) productSet.add(r.product_name);
-      if (r.group_name) groupSet.add(r.group_name);
+      if (!r.group_name) continue;
+      if (filters.clientName && r.client_name !== filters.clientName) continue;
+      if (filters.productName && r.product_name !== filters.productName) continue;
+      if (!matchesSearch(r)) continue;
+      groupSet.add(r.group_name);
     }
+
     return {
       clients: Array.from(clientSet).sort(),
       products: Array.from(productSet).sort(),
       groups: Array.from(groupSet).sort(),
     };
-  }, [allRows]);
+  }, [allRows, filters]);
 
   const filteredRows = useMemo(() => {
     const s = filters.search.toLowerCase();
