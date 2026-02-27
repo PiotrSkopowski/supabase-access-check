@@ -43,6 +43,8 @@ interface ResultRow extends OrderRow {
   catalog_price: number | null;
   product_matched: boolean;
   sciezka_z: string | null;
+  computed_opportunity_price: number | null;
+  computed_opportunities: SalesOpportunity[];
 }
 
 type SortKey = "product_name" | "group_name" | "client_name" | "order_date" | "quantity" | "price" | "catalog_price" | "diff" | "szansa" | "prodio" | "plik";
@@ -73,7 +75,7 @@ const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
 
 const Index = () => {
   const [allRows, setAllRows] = useState<ResultRow[]>([]);
-  const [salesOpps, setSalesOpps] = useState<SalesOpportunity[]>([]);
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -108,10 +110,6 @@ const Index = () => {
         return;
       }
 
-      // Store sales opportunities
-      if (oppsRes.data) {
-        setSalesOpps(oppsRes.data as SalesOpportunity[]);
-      }
 
       const groupMap = new Map<string, string>();
       if (groupsRes.data) {
@@ -142,8 +140,35 @@ const Index = () => {
           group_name: catalog?.group_name ?? null,
           product_matched: !!catalog,
           sciezka_z: catalog?.sciezka_z ?? null,
+          computed_opportunity_price: null,
+          computed_opportunities: [] as SalesOpportunity[],
         };
       });
+
+      // Pre-compute opportunity matches once
+      if (oppsRes.data && oppsRes.data.length > 0) {
+        const opps = oppsRes.data as SalesOpportunity[];
+        for (const row of joined) {
+          if (!row.product_name || !row.client_name) continue;
+          const rowClient = norm(row.client_name);
+          const rowProduct = norm(row.product_name);
+          const rowDesc = norm(row.description);
+          const matched = opps.filter((o) => {
+            const oppClient = norm(o.client_name);
+            const oppProduct = norm(o.product_name);
+            // Client match: bidirectional contains
+            if (!(oppClient.includes(rowClient) || rowClient.includes(oppClient))) return false;
+            // Product match: product_name OR description (bidirectional)
+            const pMatch = oppProduct.includes(rowProduct) || rowProduct.includes(oppProduct);
+            const dMatch = rowDesc ? (oppProduct.includes(rowDesc) || rowDesc.includes(oppProduct)) : false;
+            return pMatch || dMatch;
+          });
+          if (matched.length > 0) {
+            row.computed_opportunities = matched;
+            row.computed_opportunity_price = matched[0].unit_price ?? null;
+          }
+        }
+      }
 
       setAllRows(joined);
       setLoading(false);
@@ -152,24 +177,6 @@ const Index = () => {
     load();
   }, []);
 
-  // Fuzzy bidirectional contains check
-  const fuzzyContains = useCallback((a: string, b: string): boolean => {
-    const na = norm(a);
-    const nb = norm(b);
-    return na.includes(nb) || nb.includes(na);
-  }, []);
-
-  const getOpportunitiesForRow = useCallback((row: ResultRow): SalesOpportunity[] => {
-    if (!row.product_name || !row.client_name) return [];
-    return salesOpps.filter((o) => {
-      // Client match: bidirectional contains
-      if (!fuzzyContains(o.client_name, row.client_name!)) return false;
-      // Product match: product_name OR description (bidirectional)
-      const productNameMatch = fuzzyContains(o.product_name, row.product_name);
-      const descriptionMatch = row.description ? fuzzyContains(o.product_name, row.description) : false;
-      return productNameMatch || descriptionMatch;
-    });
-  }, [salesOpps, fuzzyContains]);
 
   // Cross-filtering: each filter's options are derived from rows matching the OTHER filters + global search
   const filterOptions = useMemo(() => {
@@ -276,16 +283,13 @@ const Index = () => {
           valB = getDiff(b) ?? -Infinity;
           break;
         case "szansa": {
-          const oppsA = getOpportunitiesForRow(a);
-          const oppsB = getOpportunitiesForRow(b);
-          const hasA = oppsA.length > 0;
-          const hasB = oppsB.length > 0;
-          // Push empty to bottom regardless of sort direction
+          const hasA = a.computed_opportunity_price != null;
+          const hasB = b.computed_opportunity_price != null;
           if (!hasA && !hasB) return 0;
           if (!hasA) return 1;
           if (!hasB) return -1;
-          valA = oppsA[0]?.unit_price ?? 0;
-          valB = oppsB[0]?.unit_price ?? 0;
+          valA = a.computed_opportunity_price!;
+          valB = b.computed_opportunity_price!;
           break;
         }
         case "prodio":
@@ -306,7 +310,7 @@ const Index = () => {
     });
 
     return sorted;
-  }, [filteredRows, sortKey, sortDir, getOpportunitiesForRow]);
+  }, [filteredRows, sortKey, sortDir]);
 
   useEffect(() => { setPage(0); }, [filters, sortKey, sortDir, pageSize]);
 
@@ -506,7 +510,7 @@ const Index = () => {
                     </TableCell>
                     <TableCell className="text-right">{renderDiff(row)}</TableCell>
                     <TableCell>
-                      <SalesOpportunityCell opportunities={getOpportunitiesForRow(row)} />
+                      <SalesOpportunityCell opportunities={row.computed_opportunities} />
                     </TableCell>
                     <TableCell className="text-center p-1 w-[50px] max-w-[50px]">
                       <Tooltip>
