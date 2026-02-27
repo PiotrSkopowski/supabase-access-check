@@ -167,11 +167,14 @@ const Index = () => {
     setEnriching(true);
 
     // Pre-normalize all opportunity strings ONCE
-    const normOpps = pendingOpps.map((o) => ({
-      orig: o,
-      client: (o.client_name ?? "").trim().toLowerCase(),
-      product: (o.product_name ?? "").trim().toLowerCase(),
-    }));
+    // BUG FIX #1: Exclude opportunities with empty/too-short product_name (< 2 chars)
+    const normOpps = pendingOpps
+      .filter((o) => (o.product_name ?? "").trim().length >= 2)
+      .map((o) => ({
+        orig: o,
+        client: (o.client_name ?? "").trim().toLowerCase(),
+        product: (o.product_name ?? "").trim().toLowerCase(),
+      }));
 
     // Pre-normalize all row strings ONCE
     const normRows = allRows.map((r, idx) => ({
@@ -202,7 +205,17 @@ const Index = () => {
           if (pMatch || dMatch) matched.push(no.orig);
         }
         if (matched.length > 0) {
-          results.push({ idx: nr.idx, opps: matched, price: matched[0].unit_price ?? null });
+          // BUG FIX #2: Deduplicate by opportunity id
+          const seen = new Set<string | number>();
+          const unique = matched.filter((o) => {
+            const key = (o as any).id;
+            if (key == null || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          if (unique.length > 0) {
+            results.push({ idx: nr.idx, opps: unique, price: unique[0].unit_price ?? null });
+          }
         }
       }
       offset = end;
