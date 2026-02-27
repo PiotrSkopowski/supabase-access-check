@@ -133,10 +133,10 @@ const ProductsPage = () => {
       }
 
       if (entry.prices.length >= 2) {
-        const first = entry.prices[entry.prices.length - 1]; // oldest
         const last = entry.prices[0]; // newest
-        if (last > first) entry.trend = "up";
-        else if (last < first) entry.trend = "down";
+        const prev = entry.prices[1]; // penultimate
+        if (last > prev) entry.trend = "up";
+        else if (last < prev) entry.trend = "down";
         else entry.trend = "flat";
       }
     }
