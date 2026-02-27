@@ -1,8 +1,11 @@
-import { Search, X } from "lucide-react";
+import { Search, X, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ComboboxFilter } from "@/components/ComboboxFilter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 export interface FilterState {
   search: string;
@@ -10,6 +13,16 @@ export interface FilterState {
   productName: string;
   groupName: string;
 }
+
+export type ToggleableColumn = "group_name" | "client_name" | "order_date" | "quantity" | "price";
+
+export const TOGGLEABLE_COLUMNS: { key: ToggleableColumn; label: string }[] = [
+  { key: "group_name", label: "Grupa Produktowa" },
+  { key: "client_name", label: "Klient" },
+  { key: "order_date", label: "Data" },
+  { key: "quantity", label: "Ilość" },
+  { key: "price", label: "Wycena (Zlec. / Kat.)" },
+];
 
 interface OrderFiltersProps {
   filters: FilterState;
@@ -20,6 +33,8 @@ interface OrderFiltersProps {
   pageSize: number;
   onPageSizeChange: (size: number) => void;
   pageSizeOptions: readonly number[];
+  hiddenColumns: Set<ToggleableColumn>;
+  onToggleColumn: (col: ToggleableColumn) => void;
 }
 
 export const EMPTY_FILTERS: FilterState = {
@@ -29,7 +44,7 @@ export const EMPTY_FILTERS: FilterState = {
   groupName: "",
 };
 
-export function OrderFilters({ filters, onChange, clients, products, groups, pageSize, onPageSizeChange, pageSizeOptions }: OrderFiltersProps) {
+export function OrderFilters({ filters, onChange, clients, products, groups, pageSize, onPageSizeChange, pageSizeOptions, hiddenColumns, onToggleColumn }: OrderFiltersProps) {
   const hasAny = filters.search || filters.clientName || filters.productName || filters.groupName;
 
   return (
@@ -55,7 +70,7 @@ export function OrderFilters({ filters, onChange, clients, products, groups, pag
         )}
       </div>
 
-      {/* Row 2: Combobox filters + page size */}
+      {/* Row 2: Combobox filters + column toggle + page size */}
       <div className="flex flex-wrap gap-3 items-center">
         <ComboboxFilter
           value={filters.clientName}
@@ -79,6 +94,27 @@ export function OrderFilters({ filters, onChange, clients, products, groups, pag
           className="w-[220px]"
         />
         <div className="flex items-center gap-1.5 ml-auto">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 gap-1.5">
+                <SlidersHorizontal className="h-4 w-4" />
+                <span className="hidden sm:inline">Kolumny</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Widoczność kolumn</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {TOGGLEABLE_COLUMNS.map((col) => (
+                <DropdownMenuCheckboxItem
+                  key={col.key}
+                  checked={!hiddenColumns.has(col.key)}
+                  onCheckedChange={() => onToggleColumn(col.key)}
+                >
+                  {col.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <span className="text-sm text-muted-foreground whitespace-nowrap">Wierszy:</span>
           <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
             <SelectTrigger className="w-[70px] h-9">
