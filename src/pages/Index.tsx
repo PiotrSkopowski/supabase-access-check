@@ -427,7 +427,7 @@ const Index = () => {
 
   const hasProdioLink = (row: ResultRow) => !!row.product_id;
 
-  const COL_COUNT = 12;
+  const COL_COUNT = 10;
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-6">
@@ -478,17 +478,11 @@ const Index = () => {
                 <TableHead className="font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("quantity")}>
                   <span className="inline-flex items-center justify-end">Ilość <SortIcon column="quantity" /></span>
                 </TableHead>
-                <TableHead className="font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("price")}>
-                  <span className="inline-flex items-center justify-end">Cena Zlecenia <SortIcon column="price" /></span>
+                <TableHead className="font-semibold text-right cursor-pointer select-none min-w-[130px]" onClick={() => handleSort("price")}>
+                  <span className="inline-flex items-center justify-end whitespace-normal">Wycena (Zlec.&nbsp;/&nbsp;Kat.) <SortIcon column="price" /></span>
                 </TableHead>
-                <TableHead className="font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("catalog_price")}>
-                  <span className="inline-flex items-center justify-end">Cena Katalogowa <SortIcon column="catalog_price" /></span>
-                </TableHead>
-                <TableHead className="font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("diff")}>
-                  <span className="inline-flex items-center justify-end">Różnica <SortIcon column="diff" /></span>
-                </TableHead>
-                <TableHead className="font-semibold min-w-[180px] cursor-pointer select-none" onClick={() => handleSort("szansa")}>
-                  <span className="inline-flex items-center">Szansa Sprzedaży <SortIcon column="szansa" /></span>
+                <TableHead className="font-semibold cursor-pointer select-none min-w-[90px]" onClick={() => handleSort("szansa")}>
+                  <span className="inline-flex items-center whitespace-normal">Szansa Sprzedaży <SortIcon column="szansa" /></span>
                 </TableHead>
                 <TableHead className="font-semibold w-[50px] max-w-[50px] text-center cursor-pointer select-none p-1" onClick={() => handleSort("prodio")}>
                   <span className="inline-flex items-center justify-center text-xs">
@@ -553,15 +547,19 @@ const Index = () => {
                       {row.order_date ? formatDate(row.order_date) : "—"}
                     </TableCell>
                     <TableCell className="text-right">{row.quantity ?? "—"}</TableCell>
-                    <TableCell className="text-right font-medium">
-                      {row.price != null ? formatPrice(row.price, row.currency) : "—"}
-                    </TableCell>
                     <TableCell className="text-right">
-                      {row.catalog_price != null
-                        ? formatPrice(row.catalog_price, row.currency)
-                        : <span className="text-muted-foreground text-xs">Brak w katalogu</span>}
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="text-sm font-bold text-foreground">
+                          {row.price != null ? formatPrice(row.price, row.currency) : "—"}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {row.catalog_price != null
+                            ? formatPrice(row.catalog_price, row.currency)
+                            : "Brak w katalogu"}
+                        </span>
+                        {renderDiff(row)}
+                      </div>
                     </TableCell>
-                    <TableCell className="text-right">{renderDiff(row)}</TableCell>
                     <TableCell>
                       {enriching && row.computed_opportunities.length === 0 ? (
                         <span className="text-xs text-muted-foreground animate-pulse">Obliczanie…</span>
