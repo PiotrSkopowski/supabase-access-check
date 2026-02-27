@@ -16,10 +16,10 @@ import {
 
 const mainItems = [
   { title: "Pulpit", url: "/", icon: Home },
+  { title: "Produkty", url: "/products", icon: Package },
 ];
 
 const mgmtItems = [
-  { title: "Produkty", url: "/products", icon: Package },
   { title: "Klienci", url: "/customers", icon: Users },
   { title: "Raporty", url: "/reports", icon: BarChart3 },
 ];
