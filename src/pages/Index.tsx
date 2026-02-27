@@ -75,7 +75,7 @@ const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
 
 const Index = () => {
   const [allRows, setAllRows] = useState<ResultRow[]>([]);
-  
+  const [enriching, setEnriching] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -83,6 +83,9 @@ const Index = () => {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  // Store opps ref for async enrichment
+  const [pendingOpps, setPendingOpps] = useState<SalesOpportunity[] | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -109,7 +112,6 @@ const Index = () => {
         setLoading(false);
         return;
       }
-
 
       const groupMap = new Map<string, string>();
       if (groupsRes.data) {
@@ -145,37 +147,88 @@ const Index = () => {
         };
       });
 
-      // Pre-compute opportunity matches once
-      if (oppsRes.data && oppsRes.data.length > 0) {
-        const opps = oppsRes.data as SalesOpportunity[];
-        for (const row of joined) {
-          if (!row.product_name || !row.client_name) continue;
-          const rowClient = norm(row.client_name);
-          const rowProduct = norm(row.product_name);
-          const rowDesc = norm(row.description);
-          const matched = opps.filter((o) => {
-            const oppClient = norm(o.client_name);
-            const oppProduct = norm(o.product_name);
-            // Client match: bidirectional contains
-            if (!(oppClient.includes(rowClient) || rowClient.includes(oppClient))) return false;
-            // Product match: product_name OR description (bidirectional)
-            const pMatch = oppProduct.includes(rowProduct) || rowProduct.includes(oppProduct);
-            const dMatch = rowDesc ? (oppProduct.includes(rowDesc) || rowDesc.includes(oppProduct)) : false;
-            return pMatch || dMatch;
-          });
-          if (matched.length > 0) {
-            row.computed_opportunities = matched;
-            row.computed_opportunity_price = matched[0].unit_price ?? null;
-          }
-        }
-      }
-
+      // Render table immediately
       setAllRows(joined);
       setLoading(false);
+
+      // Queue async enrichment
+      if (oppsRes.data && oppsRes.data.length > 0) {
+        setPendingOpps(oppsRes.data as SalesOpportunity[]);
+      }
     };
 
     load();
   }, []);
+
+  // Async enrichment: runs AFTER table is visible, non-blocking via chunked setTimeout
+  useEffect(() => {
+    if (!pendingOpps || pendingOpps.length === 0 || allRows.length === 0) return;
+
+    setEnriching(true);
+
+    // Pre-normalize all opportunity strings ONCE
+    const normOpps = pendingOpps.map((o) => ({
+      orig: o,
+      client: (o.client_name ?? "").trim().toLowerCase(),
+      product: (o.product_name ?? "").trim().toLowerCase(),
+    }));
+
+    // Pre-normalize all row strings ONCE
+    const normRows = allRows.map((r, idx) => ({
+      idx,
+      client: (r.client_name ?? "").trim().toLowerCase(),
+      product: (r.product_name ?? "").trim().toLowerCase(),
+      desc: (r.description ?? "").trim().toLowerCase(),
+      hasKeys: !!(r.product_name && r.client_name),
+    }));
+
+    // Process in chunks to avoid blocking main thread
+    const CHUNK = 500;
+    const results: { idx: number; opps: SalesOpportunity[]; price: number | null }[] = [];
+    let offset = 0;
+
+    const processChunk = () => {
+      const end = Math.min(offset + CHUNK, normRows.length);
+      for (let i = offset; i < end; i++) {
+        const nr = normRows[i];
+        if (!nr.hasKeys) continue;
+        const matched: SalesOpportunity[] = [];
+        for (const no of normOpps) {
+          // Client match: bidirectional contains
+          if (!(no.client.includes(nr.client) || nr.client.includes(no.client))) continue;
+          // Product match: product_name OR description (bidirectional)
+          const pMatch = no.product.includes(nr.product) || nr.product.includes(no.product);
+          const dMatch = nr.desc ? (no.product.includes(nr.desc) || nr.desc.includes(no.product)) : false;
+          if (pMatch || dMatch) matched.push(no.orig);
+        }
+        if (matched.length > 0) {
+          results.push({ idx: nr.idx, opps: matched, price: matched[0].unit_price ?? null });
+        }
+      }
+      offset = end;
+
+      if (offset < normRows.length) {
+        setTimeout(processChunk, 0);
+      } else {
+        // All done — update rows in one batch
+        setAllRows((prev) => {
+          const updated = [...prev];
+          for (const r of results) {
+            updated[r.idx] = {
+              ...updated[r.idx],
+              computed_opportunities: r.opps,
+              computed_opportunity_price: r.price,
+            };
+          }
+          return updated;
+        });
+        setEnriching(false);
+        setPendingOpps(null);
+      }
+    };
+
+    setTimeout(processChunk, 0);
+  }, [pendingOpps]); // Only run when pendingOpps is set
 
 
   // Cross-filtering: each filter's options are derived from rows matching the OTHER filters + global search
@@ -510,7 +563,11 @@ const Index = () => {
                     </TableCell>
                     <TableCell className="text-right">{renderDiff(row)}</TableCell>
                     <TableCell>
-                      <SalesOpportunityCell opportunities={row.computed_opportunities} />
+                      {enriching && row.computed_opportunities.length === 0 ? (
+                        <span className="text-xs text-muted-foreground animate-pulse">Obliczanie…</span>
+                      ) : (
+                        <SalesOpportunityCell opportunities={row.computed_opportunities} />
+                      )}
                     </TableCell>
                     <TableCell className="text-center p-1 w-[50px] max-w-[50px]">
                       <Tooltip>
