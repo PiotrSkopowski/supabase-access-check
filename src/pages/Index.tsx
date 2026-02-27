@@ -81,17 +81,6 @@ const fuzzyClientMatch = (a: string, b: string): boolean => {
 
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
 
-// Sticky cell classes
-const stickyLeftFirst = "sticky left-0 z-20 bg-muted/95 backdrop-blur-sm";
-const stickyLeftSecond = "sticky left-10 z-20 bg-muted/95 backdrop-blur-sm";
-const stickyRightProdio = "sticky right-[50px] z-20 bg-muted/95 backdrop-blur-sm shadow-[-4px_0_8px_-4px_hsl(var(--border))]";
-const stickyRightPlik = "sticky right-0 z-20 bg-muted/95 backdrop-blur-sm";
-
-const stickyBodyLeftFirst = "sticky left-0 z-10 bg-background";
-const stickyBodyLeftSecond = "sticky left-10 z-10 bg-background";
-const stickyBodyRightProdio = "sticky right-[50px] z-10 bg-background shadow-[-4px_0_8px_-4px_hsl(var(--border))]";
-const stickyBodyRightPlik = "sticky right-0 z-10 bg-background";
-
 const Index = () => {
   const [allRows, setAllRows] = useState<ResultRow[]>([]);
   const [enriching, setEnriching] = useState(false);
@@ -516,8 +505,8 @@ const Index = () => {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">
-                <TableHead className={`font-semibold w-10 ${stickyLeftFirst}`}>#</TableHead>
-                <TableHead className={`font-semibold min-w-[200px] cursor-pointer select-none ${stickyLeftSecond}`} onClick={() => handleSort("product_name")}>
+                <TableHead className="font-semibold w-10">#</TableHead>
+                <TableHead className="font-semibold min-w-[200px] cursor-pointer select-none" onClick={() => handleSort("product_name")}>
                   <span className="inline-flex items-center">Produkt <SortIcon column="product_name" /></span>
                 </TableHead>
                 {show("group_name") && (
@@ -551,13 +540,13 @@ const Index = () => {
                     <SortIcon column="szansa" />
                   </span>
                 </TableHead>
-                <TableHead className={`font-semibold w-[50px] max-w-[50px] text-center cursor-pointer select-none p-1 ${stickyRightProdio}`} onClick={() => handleSort("prodio")}>
+                <TableHead className="font-semibold w-[50px] max-w-[50px] text-center cursor-pointer select-none p-1" onClick={() => handleSort("prodio")}>
                   <span className="inline-flex items-center justify-center text-xs">
                     <Eye className="h-3.5 w-3.5" />
                     <SortIcon column="prodio" />
                   </span>
                 </TableHead>
-                <TableHead className={`font-semibold w-[50px] max-w-[50px] text-center cursor-pointer select-none p-1 ${stickyRightPlik}`} onClick={() => handleSort("plik")}>
+                <TableHead className="font-semibold w-[50px] max-w-[50px] text-center cursor-pointer select-none p-1" onClick={() => handleSort("plik")}>
                   <span className="inline-flex items-center justify-center text-xs">
                     <Paperclip className="h-3.5 w-3.5" />
                     <SortIcon column="plik" />
@@ -583,10 +572,10 @@ const Index = () => {
               ) : (
                 pageRows.map((row, i) => (
                   <TableRow key={row.id || i} className="hover:bg-muted/50 transition-colors group/row">
-                    <TableCell className={`text-muted-foreground text-xs ${stickyBodyLeftFirst} group-hover/row:bg-muted/50`}>
+                    <TableCell className="text-muted-foreground text-xs">
                       {page * pageSize + i + 1}
                     </TableCell>
-                    <TableCell className={`${stickyBodyLeftSecond} group-hover/row:bg-muted/50`}>
+                    <TableCell>
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => {
@@ -656,7 +645,7 @@ const Index = () => {
                         <SalesOpportunityCell opportunities={row.computed_opportunities} />
                       )}
                     </TableCell>
-                    <TableCell className={`text-center p-1 w-[50px] max-w-[50px] ${stickyBodyRightProdio} group-hover/row:bg-muted/50`}>
+                    <TableCell className="text-center p-1 w-[50px] max-w-[50px]">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           {hasProdioLink(row) ? (
@@ -679,7 +668,7 @@ const Index = () => {
                         </TooltipContent>
                       </Tooltip>
                     </TableCell>
-                    <TableCell className={`text-center p-1 w-[50px] max-w-[50px] ${stickyBodyRightPlik} group-hover/row:bg-muted/50`}>
+                    <TableCell className="text-center p-1 w-[50px] max-w-[50px]">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           {row.sciezka_z ? (
