@@ -167,23 +167,33 @@ const Index = () => {
     setEnriching(true);
 
     // Pre-normalize all opportunity strings ONCE
-    // BUG FIX #1: Exclude opportunities with empty/too-short product_name (< 2 chars)
-    const normOpps = pendingOpps
-      .filter((o) => (o.product_name ?? "").trim().length >= 2)
-      .map((o) => ({
+    // Exclude opportunities with empty/too-short product_name (< 2 chars) or empty client
+    const normOpps: { orig: SalesOpportunity; client: string; product: string }[] = [];
+    for (const o of pendingOpps) {
+      const prodRaw = String(o.product_name ?? "").trim();
+      const clientRaw = String(o.client_name ?? "").trim();
+      if (prodRaw.length < 2 || clientRaw.length < 1) continue;
+      normOpps.push({
         orig: o,
-        client: (o.client_name ?? "").trim().toLowerCase(),
-        product: (o.product_name ?? "").trim().toLowerCase(),
-      }));
+        client: clientRaw.toLowerCase(),
+        product: prodRaw.toLowerCase(),
+      });
+    }
 
     // Pre-normalize all row strings ONCE
-    const normRows = allRows.map((r, idx) => ({
-      idx,
-      client: (r.client_name ?? "").trim().toLowerCase(),
-      product: (r.product_name ?? "").trim().toLowerCase(),
-      desc: (r.description ?? "").trim().toLowerCase(),
-      hasKeys: !!(r.product_name && r.client_name),
-    }));
+    const normRows = allRows.map((r, idx) => {
+      const client = String(r.client_name ?? "").trim().toLowerCase();
+      const product = String(r.product_name ?? "").trim().toLowerCase();
+      const desc = String(r.description ?? "").trim().toLowerCase();
+      return {
+        idx,
+        client,
+        product,
+        desc,
+        // Row must have non-empty client AND non-empty product to be matchable
+        hasKeys: client.length >= 1 && product.length >= 1,
+      };
+    });
 
     // Process in chunks to avoid blocking main thread
     const CHUNK = 500;
@@ -195,27 +205,23 @@ const Index = () => {
       for (let i = offset; i < end; i++) {
         const nr = normRows[i];
         if (!nr.hasKeys) continue;
-        const matched: SalesOpportunity[] = [];
+        const seen = new Set<string | number>();
+        const unique: SalesOpportunity[] = [];
         for (const no of normOpps) {
-          // Client match: bidirectional contains
+          // Client match: bidirectional contains (both guaranteed non-empty)
           if (!(no.client.includes(nr.client) || nr.client.includes(no.client))) continue;
           // Product match: product_name OR description (bidirectional)
-          const pMatch = no.product.includes(nr.product) || nr.product.includes(no.product);
-          const dMatch = nr.desc ? (no.product.includes(nr.desc) || nr.desc.includes(no.product)) : false;
-          if (pMatch || dMatch) matched.push(no.orig);
+          const pMatch = nr.product.length >= 2 && (no.product.includes(nr.product) || nr.product.includes(no.product));
+          const dMatch = nr.desc.length >= 2 && (no.product.includes(nr.desc) || nr.desc.includes(no.product));
+          if (!pMatch && !dMatch) continue;
+          // Deduplicate inline by opportunity id
+          const key = (no.orig as any).id;
+          if (key != null && seen.has(key)) continue;
+          if (key != null) seen.add(key);
+          unique.push(no.orig);
         }
-        if (matched.length > 0) {
-          // BUG FIX #2: Deduplicate by opportunity id
-          const seen = new Set<string | number>();
-          const unique = matched.filter((o) => {
-            const key = (o as any).id;
-            if (key == null || seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          });
-          if (unique.length > 0) {
-            results.push({ idx: nr.idx, opps: unique, price: unique[0].unit_price ?? null });
-          }
+        if (unique.length > 0) {
+          results.push({ idx: nr.idx, opps: unique, price: unique[0].unit_price ?? null });
         }
       }
       offset = end;
