@@ -488,8 +488,8 @@ const Index = () => {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">
-                <TableHead className="font-semibold w-10">#</TableHead>
-                <TableHead className="font-semibold min-w-[200px] cursor-pointer select-none" onClick={() => handleSort("product_name")}>
+                <TableHead className="font-semibold w-10 sticky left-0 z-20 bg-muted/95 backdrop-blur-sm">#</TableHead>
+                <TableHead className="font-semibold min-w-[200px] cursor-pointer select-none sticky left-10 z-20 bg-muted/95 backdrop-blur-sm" onClick={() => handleSort("product_name")}>
                   <span className="inline-flex items-center">Produkt <SortIcon column="product_name" /></span>
                 </TableHead>
                 <TableHead className="font-semibold min-w-[140px] cursor-pointer select-none" onClick={() => handleSort("group_name")}>
@@ -510,13 +510,13 @@ const Index = () => {
                 <TableHead className="font-semibold cursor-pointer select-none min-w-[90px]" onClick={() => handleSort("szansa")}>
                   <span className="inline-flex items-center whitespace-normal">Szansa Sprzedaży <SortIcon column="szansa" /></span>
                 </TableHead>
-                <TableHead className="font-semibold w-[50px] max-w-[50px] text-center cursor-pointer select-none p-1" onClick={() => handleSort("prodio")}>
+                <TableHead className="font-semibold w-[50px] max-w-[50px] text-center cursor-pointer select-none p-1 sticky right-[50px] z-20 bg-muted/95 backdrop-blur-sm shadow-[-4px_0_8px_-4px_hsl(var(--border))]" onClick={() => handleSort("prodio")}>
                   <span className="inline-flex items-center justify-center text-xs">
                     <Eye className="h-3.5 w-3.5" />
                     <SortIcon column="prodio" />
                   </span>
                 </TableHead>
-                <TableHead className="font-semibold w-[50px] max-w-[50px] text-center cursor-pointer select-none p-1" onClick={() => handleSort("plik")}>
+                <TableHead className="font-semibold w-[50px] max-w-[50px] text-center cursor-pointer select-none p-1 sticky right-0 z-20 bg-muted/95 backdrop-blur-sm" onClick={() => handleSort("plik")}>
                   <span className="inline-flex items-center justify-center text-xs">
                     <Paperclip className="h-3.5 w-3.5" />
                     <SortIcon column="plik" />
@@ -542,10 +542,10 @@ const Index = () => {
               ) : (
                 pageRows.map((row, i) => (
                   <TableRow key={row.id || i} className="hover:bg-muted/50 transition-colors">
-                    <TableCell className="text-muted-foreground text-xs">
+                    <TableCell className="text-muted-foreground text-xs sticky left-0 z-10 bg-background">
                       {page * pageSize + i + 1}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="sticky left-10 z-10 bg-background">
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium text-foreground">{row.product_name || "—"}</span>
                         {!row.product_matched && row.product_name && (
@@ -588,12 +588,12 @@ const Index = () => {
                     </TableCell>
                     <TableCell>
                       {enriching && row.computed_opportunities.length === 0 ? (
-                        <span className="text-xs text-muted-foreground animate-pulse">Obliczanie…</span>
+                        <div className="h-4 w-16 bg-muted rounded animate-pulse" />
                       ) : (
                         <SalesOpportunityCell opportunities={row.computed_opportunities} />
                       )}
                     </TableCell>
-                    <TableCell className="text-center p-1 w-[50px] max-w-[50px]">
+                    <TableCell className="text-center p-1 w-[50px] max-w-[50px] sticky right-[50px] z-10 bg-background shadow-[-4px_0_8px_-4px_hsl(var(--border))]">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           {hasProdioLink(row) ? (
@@ -616,7 +616,7 @@ const Index = () => {
                         </TooltipContent>
                       </Tooltip>
                     </TableCell>
-                    <TableCell className="text-center p-1 w-[50px] max-w-[50px]">
+                    <TableCell className="text-center p-1 w-[50px] max-w-[50px] sticky right-0 z-10 bg-background">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           {row.sciezka_z ? (
