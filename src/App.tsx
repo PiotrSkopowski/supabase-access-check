@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { Layout } from "@/components/Layout";
 import Index from "./pages/Index";
 import ProductPage from "./pages/ProductPage";
+import ProductsPage from "./pages/ProductsPage";
 import LoginPage from "./pages/LoginPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound";
@@ -40,6 +41,7 @@ const App = () => (
               <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/" element={<ProtectedRoute><Layout><Index /></Layout></ProtectedRoute>} />
+              <Route path="/products" element={<ProtectedRoute><Layout><ProductsPage /></Layout></ProtectedRoute>} />
               <Route path="/product/:name" element={<ProtectedRoute><Layout><ProductPage /></Layout></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>

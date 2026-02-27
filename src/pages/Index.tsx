@@ -13,6 +13,7 @@ import {
 import { Eye, AlertTriangle, ChevronLeft, ChevronRight, Paperclip, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { OrderFilters, EMPTY_FILTERS, type FilterState, type ToggleableColumn } from "@/components/OrderFilters";
 import { SalesOpportunityCell, type SalesOpportunity } from "@/components/SalesOpportunityCell";
+import { ProductDrawer, type ProductDrawerData } from "@/components/ProductDrawer";
 import { toast } from "sonner";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
@@ -104,6 +105,10 @@ const Index = () => {
   const [hiddenColumns, setHiddenColumns] = useState<Set<ToggleableColumn>>(getStoredHiddenCols);
 
   const [pendingOpps, setPendingOpps] = useState<SalesOpportunity[] | null>(null);
+  const [rawOpps, setRawOpps] = useState<SalesOpportunity[]>([]);
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<ProductDrawerData | null>(null);
 
   const toggleColumn = useCallback((col: ToggleableColumn) => {
     setHiddenColumns((prev) => {
@@ -181,6 +186,7 @@ const Index = () => {
       setLoading(false);
 
       if (oppsRes.data && oppsRes.data.length > 0) {
+        setRawOpps(oppsRes.data as SalesOpportunity[]);
         setPendingOpps(oppsRes.data as SalesOpportunity[]);
       }
     };
@@ -582,7 +588,19 @@ const Index = () => {
                     </TableCell>
                     <TableCell className={`${stickyBodyLeftSecond} group-hover/row:bg-muted/50`}>
                       <div className="flex items-center gap-1.5">
-                        <span className="font-medium text-foreground">{row.product_name || "—"}</span>
+                        <button
+                          onClick={() => {
+                            setSelectedProduct({
+                              product_name: row.product_name,
+                              description: row.description,
+                              client_name: row.client_name,
+                            });
+                            setDrawerOpen(true);
+                          }}
+                          className="font-medium text-foreground hover:text-primary transition-colors text-left"
+                        >
+                          {row.product_name || "—"}
+                        </button>
                         {!row.product_matched && row.product_name && (
                           <Tooltip>
                             <TooltipTrigger>
@@ -715,6 +733,15 @@ const Index = () => {
           </div>
         )}
       </Card>
+
+      <ProductDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        product={selectedProduct}
+        allOrders={allRows}
+        allOpportunities={rawOpps}
+        loading={loading}
+      />
     </div>
   );
 };
