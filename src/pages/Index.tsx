@@ -205,7 +205,7 @@ const Index = () => {
       for (let i = offset; i < end; i++) {
         const nr = normRows[i];
         if (!nr.hasKeys) continue;
-        const seen = new Set<string | number>();
+        const seenKeys = new Set<string>();
         const unique: SalesOpportunity[] = [];
         for (const no of normOpps) {
           // Client match: bidirectional contains (both guaranteed non-empty)
@@ -214,14 +214,21 @@ const Index = () => {
           const pMatch = nr.product.length >= 2 && (no.product.includes(nr.product) || nr.product.includes(no.product));
           const dMatch = nr.desc.length >= 2 && (no.product.includes(nr.desc) || nr.desc.includes(no.product));
           if (!pMatch && !dMatch) continue;
-          // Deduplicate inline by opportunity id
-          const key = (no.orig as any).id;
-          if (key != null && seen.has(key)) continue;
-          if (key != null) seen.add(key);
-          unique.push(no.orig);
+
+          // Bezwzględna deduplikacja po zawartości (composite key)
+          const opp = no.orig;
+          const uniqueKey = `${String(opp.opportunity_date ?? "")}_${String(opp.unit_price ?? "")}_${String(opp.quantity ?? "")}`;
+          if (seenKeys.has(uniqueKey)) continue;
+          seenKeys.add(uniqueKey);
+          unique.push(opp);
         }
         if (unique.length > 0) {
-          results.push({ idx: nr.idx, opps: unique, price: unique[0].unit_price ?? null });
+          const cleanHistory = [...unique].sort((a, b) => {
+            const aDate = String(a.opportunity_date ?? "");
+            const bDate = String(b.opportunity_date ?? "");
+            return bDate.localeCompare(aDate);
+          });
+          results.push({ idx: nr.idx, opps: cleanHistory, price: cleanHistory[0]?.unit_price ?? null });
         }
       }
       offset = end;
