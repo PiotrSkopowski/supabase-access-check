@@ -28,54 +28,60 @@ export interface ProductDrawerData {
   client_name: string | null;
 }
 
-interface PricePoint {
-  date: string;
-  price: number;
-  source: "Prodio" | "Sales";
-}
-
-interface SimilarProduct {
+interface OrderRecord {
   product_name: string;
-  date: string;
-  unit_price: number;
-  distance: number;
+  description: string | null;
+  client_name: string | null;
+  price: number | null;
+  order_date: string | null;
+  quantity?: number | null;
   product_id?: string | null;
   sciezka_z?: string | null;
+}
+
+interface OpportunityRecord {
+  client_name: string;
+  opportunity_date: string;
+  product_name: string;
+  unit_price: number;
+  quantity: number;
 }
 
 interface ProductDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   product: ProductDrawerData | null;
-  allOrders: {
-    product_name: string;
-    description: string | null;
-    client_name: string | null;
-    price: number | null;
-    order_date: string | null;
-    product_id?: string | null;
-    sciezka_z?: string | null;
-  }[];
-  allOpportunities: {
-    client_name: string;
-    opportunity_date: string;
-    product_name: string;
-    unit_price: number;
-    quantity: number;
-  }[];
+  allOrders: OrderRecord[];
+  allOpportunities: OpportunityRecord[];
   loading?: boolean;
 }
 
-const PALETTE = [
-  "hsl(var(--primary))",
-  "hsl(var(--success))",
-  "hsl(25, 95%, 53%)",
-  "hsl(280, 65%, 60%)",
-  "hsl(190, 80%, 45%)",
-  "hsl(340, 75%, 55%)",
-  "hsl(55, 85%, 50%)",
-  "hsl(160, 60%, 45%)",
-];
+/* ── Types for internal use ── */
+
+interface OperationRow {
+  date: string;
+  type: "Zlecenie" | "Szansa";
+  quantity: number | null;
+  unit_price: number;
+  value: number | null;
+  product_id: string | null;
+  sciezka_z: string | null;
+  product_name: string;
+}
+
+interface SimilarProduct {
+  product_name: string;
+  description: string | null;
+  date: string;
+  unit_price: number;
+  distance: number;
+  product_id: string | null;
+  sciezka_z: string | null;
+}
+
+/* ── Helpers ── */
+
+const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("pl-PL", {
@@ -84,37 +90,70 @@ const formatDate = (iso: string) =>
     year: "numeric",
   });
 
-function getPriceHistory(
+const PALETTE_ORDER = [
+  "hsl(var(--primary))",
+  "hsl(190, 80%, 45%)",
+  "hsl(280, 65%, 60%)",
+  "hsl(160, 60%, 45%)",
+];
+const PALETTE_OPP = [
+  "hsl(25, 95%, 53%)",
+  "hsl(340, 75%, 55%)",
+  "hsl(55, 85%, 50%)",
+  "hsl(0, 70%, 55%)",
+];
+
+/** Strict match: exact product_name + description */
+function getStrictOperations(
   productName: string,
-  allOrders: ProductDrawerProps["allOrders"],
-  allOpportunities: ProductDrawerProps["allOpportunities"]
-): PricePoint[] {
-  const norm = (s: string) => (s ?? "").trim().toLowerCase();
+  description: string | null,
+  allOrders: OrderRecord[],
+  allOpportunities: OpportunityRecord[],
+): OperationRow[] {
   const pName = norm(productName);
-  const points: PricePoint[] = [];
+  const pDesc = norm(description);
+  const rows: OperationRow[] = [];
 
   for (const o of allOrders) {
-    if (norm(o.product_name) === pName && o.price != null && o.order_date) {
-      points.push({ date: o.order_date.slice(0, 10), price: o.price, source: "Prodio" });
-    }
+    if (norm(o.product_name) !== pName) continue;
+    if (norm(o.description) !== pDesc) continue;
+    if (o.price == null || !o.order_date) continue;
+    rows.push({
+      date: o.order_date.slice(0, 10),
+      type: "Zlecenie",
+      quantity: o.quantity ?? null,
+      unit_price: o.price,
+      value: o.quantity != null ? o.price * o.quantity : null,
+      product_id: (o.product_id as string) ?? null,
+      sciezka_z: o.sciezka_z ?? null,
+      product_name: o.product_name,
+    });
   }
 
+  // For opportunities, match by product_name substring (as per existing logic)
   for (const s of allOpportunities) {
-    if (
-      norm(s.product_name).includes(pName) ||
-      pName.includes(norm(s.product_name))
-    ) {
-      if (s.unit_price > 0 && s.opportunity_date) {
-        points.push({ date: s.opportunity_date.slice(0, 10), price: s.unit_price, source: "Sales" });
-      }
-    }
+    const sName = norm(s.product_name);
+    if (!sName.includes(pName) && !pName.includes(sName)) continue;
+    if (s.unit_price <= 0 || !s.opportunity_date) continue;
+    rows.push({
+      date: s.opportunity_date.slice(0, 10),
+      type: "Szansa",
+      quantity: s.quantity,
+      unit_price: s.unit_price,
+      value: s.unit_price * s.quantity,
+      product_id: null,
+      sciezka_z: null,
+      product_name: s.product_name,
+    });
   }
 
-  points.sort((a, b) => a.date.localeCompare(b.date));
-  return points;
+  rows.sort((a, b) => b.date.localeCompare(a.date));
+  return rows;
 }
 
-function computeTrend(prices: PricePoint[]): "up" | "down" | "flat" | null {
+function computeTrend(ops: OperationRow[]): "up" | "down" | "flat" | null {
+  const prices = ops.map((o) => ({ date: o.date, price: o.unit_price }));
+  prices.sort((a, b) => a.date.localeCompare(b.date));
   if (prices.length < 2) return null;
   const last = prices[prices.length - 1].price;
   const prev = prices[prices.length - 2].price;
@@ -122,6 +161,8 @@ function computeTrend(prices: PricePoint[]): "up" | "down" | "flat" | null {
   if (last < prev) return "down";
   return "flat";
 }
+
+/* ── Component ── */
 
 export function ProductDrawer({
   open,
@@ -135,30 +176,28 @@ export function ProductDrawer({
   const [showSimilar, setShowSimilar] = useState(false);
   const [checkedProducts, setCheckedProducts] = useState<Set<string>>(new Set());
 
-  // Price history for main product
-  const mainHistory = useMemo<PricePoint[]>(
-    () => (product ? getPriceHistory(product.product_name, allOrders, allOpportunities) : []),
-    [product, allOrders, allOpportunities]
+  // 1. Strict operations for main product
+  const mainOps = useMemo<OperationRow[]>(
+    () => (product ? getStrictOperations(product.product_name, product.description, allOrders, allOpportunities) : []),
+    [product, allOrders, allOpportunities],
   );
 
-  const trend = useMemo(() => computeTrend(mainHistory), [mainHistory]);
+  const mainTrend = useMemo(() => computeTrend(mainOps), [mainOps]);
 
-  // Similar products
+  // Similar products (Levenshtein)
   const similarProducts = useMemo<SimilarProduct[]>(() => {
     if (!product || !showSimilar) return [];
-    const clientNorm = (product.client_name ?? "").trim().toLowerCase();
+    const clientNorm = norm(product.client_name);
     if (!clientNorm) return [];
-    const pNameNorm = product.product_name.trim().toLowerCase();
+    const pNameNorm = norm(product.product_name);
 
     const seen = new Map<string, SimilarProduct>();
 
     for (const o of allOrders) {
-      const oClient = (o.client_name ?? "").trim().toLowerCase();
+      const oClient = norm(o.client_name);
       if (!oClient.includes(clientNorm) && !clientNorm.includes(oClient)) continue;
-
-      const oName = (o.product_name ?? "").trim().toLowerCase();
+      const oName = norm(o.product_name);
       if (oName === pNameNorm) continue;
-
       const dist = levenshtein(pNameNorm, oName);
       if (dist > sensitivity) continue;
 
@@ -167,10 +206,11 @@ export function ProductDrawer({
       if (!existing || (o.order_date && o.order_date > (existing.date ?? ""))) {
         seen.set(key, {
           product_name: o.product_name,
+          description: o.description,
           date: o.order_date?.slice(0, 10) ?? "—",
           unit_price: o.price ?? 0,
           distance: dist,
-          product_id: o.product_id ?? null,
+          product_id: (o.product_id as string) ?? null,
           sciezka_z: o.sciezka_z ?? null,
         });
       }
@@ -179,7 +219,6 @@ export function ProductDrawer({
     return Array.from(seen.values()).sort((a, b) => a.distance - b.distance);
   }, [product, allOrders, sensitivity, showSimilar]);
 
-  // Toggle checkbox
   const toggleProduct = (name: string) => {
     setCheckedProducts((prev) => {
       const next = new Set(prev);
@@ -189,72 +228,87 @@ export function ProductDrawer({
     });
   };
 
-  // Build comparative chart data & config
-  const { chartData, chartConfig, activeKeys } = useMemo(() => {
-    if (!product) return { chartData: [], chartConfig: {} as ChartConfig, activeKeys: [] as string[] };
-
-    // Always include main product
-    const series: { key: string; label: string; history: PricePoint[] }[] = [
-      { key: "main", label: product.product_name.slice(0, 30), history: mainHistory },
-    ];
-
-    // Add checked similar products
-    for (const sp of similarProducts) {
-      if (checkedProducts.has(sp.product_name)) {
-        const hist = getPriceHistory(sp.product_name, allOrders, allOpportunities);
-        series.push({
-          key: `sim_${sp.product_name.slice(0, 20).replace(/\s+/g, "_")}`,
-          label: sp.product_name.slice(0, 30),
-          history: hist,
-        });
-      }
-    }
-
-    // Merge all into one timeline
-    const dateMap = new Map<string, Record<string, any>>();
-    for (const s of series) {
-      for (const p of s.history) {
-        const row = dateMap.get(p.date) ?? { date: p.date };
-        row[s.key] = p.price;
-        dateMap.set(p.date, row);
-      }
-    }
-
-    const data = Array.from(dateMap.values()).sort((a, b) =>
-      String(a.date).localeCompare(String(b.date))
-    );
-
-    const config: ChartConfig = {};
-    const keys: string[] = [];
-    series.forEach((s, i) => {
-      config[s.key] = { label: s.label, color: PALETTE[i % PALETTE.length] };
-      keys.push(s.key);
-    });
-
-    return { chartData: data, chartConfig: config, activeKeys: keys };
-  }, [product, mainHistory, similarProducts, checkedProducts, allOrders, allOpportunities]);
-
-  // Aggregate stats for checked products + main
-  const aggregateStats = useMemo(() => {
-    if (!product) return null;
-    if (checkedProducts.size === 0) return null;
-
-    const allPrices: number[] = [];
-    // Main product prices
-    for (const p of mainHistory) allPrices.push(p.price);
-    // Checked similar
+  // Operations for checked similar products
+  const checkedOpsMap = useMemo(() => {
+    const map = new Map<string, OperationRow[]>();
     for (const sp of similarProducts) {
       if (!checkedProducts.has(sp.product_name)) continue;
-      const hist = getPriceHistory(sp.product_name, allOrders, allOpportunities);
-      for (const p of hist) allPrices.push(p.price);
+      map.set(sp.product_name, getStrictOperations(sp.product_name, sp.description, allOrders, allOpportunities));
+    }
+    return map;
+  }, [similarProducts, checkedProducts, allOrders, allOpportunities]);
+
+  // Combined operations for detail table
+  const allOps = useMemo<OperationRow[]>(() => {
+    const combined = [...mainOps];
+    for (const ops of checkedOpsMap.values()) combined.push(...ops);
+    combined.sort((a, b) => b.date.localeCompare(a.date));
+    return combined;
+  }, [mainOps, checkedOpsMap]);
+
+  // Aggregate trend (all selected products)
+  const aggregateTrend = useMemo(() => {
+    if (checkedProducts.size === 0) return mainTrend;
+    return computeTrend(allOps);
+  }, [mainTrend, allOps, checkedProducts.size]);
+
+  // Aggregate stats
+  const stats = useMemo(() => {
+    const prices = allOps.map((o) => o.unit_price);
+    if (prices.length === 0) return null;
+    const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
+    return { avg, min: Math.min(...prices), max: Math.max(...prices), count: prices.length };
+  }, [allOps]);
+
+  // 2. Chart data: dual-line (orders vs opportunities) per product
+  const { chartData, chartConfig, lineKeys } = useMemo(() => {
+    if (!product) return { chartData: [], chartConfig: {} as ChartConfig, lineKeys: [] as { key: string; color: string; dash?: string }[] };
+
+    const productNames = [product.product_name, ...Array.from(checkedProducts)];
+    const allSeries: { key: string; label: string; ops: OperationRow[] }[] = [];
+
+    // For each product, create two series: orders and opportunities
+    const keys: { key: string; color: string; dash?: string }[] = [];
+
+    productNames.forEach((pn, idx) => {
+      const ops = pn === product.product_name ? mainOps : (checkedOpsMap.get(pn) ?? []);
+      const orderOps = ops.filter((o) => o.type === "Zlecenie");
+      const oppOps = ops.filter((o) => o.type === "Szansa");
+      const shortLabel = pn.slice(0, 25);
+
+      const orderKey = `order_${idx}`;
+      const oppKey = `opp_${idx}`;
+
+      if (orderOps.length > 0) {
+        allSeries.push({ key: orderKey, label: `${shortLabel} (Zlecenia)`, ops: orderOps });
+        keys.push({ key: orderKey, color: PALETTE_ORDER[idx % PALETTE_ORDER.length] });
+      }
+      if (oppOps.length > 0) {
+        allSeries.push({ key: oppKey, label: `${shortLabel} (Szanse)`, ops: oppOps });
+        keys.push({ key: oppKey, color: PALETTE_OPP[idx % PALETTE_OPP.length], dash: "5 5" });
+      }
+    });
+
+    // Merge into timeline
+    const dateMap = new Map<string, Record<string, any>>();
+    for (const s of allSeries) {
+      for (const o of s.ops) {
+        const row = dateMap.get(o.date) ?? { date: o.date };
+        row[s.key] = o.unit_price;
+        dateMap.set(o.date, row);
+      }
     }
 
-    if (allPrices.length === 0) return null;
-    const avg = allPrices.reduce((a, b) => a + b, 0) / allPrices.length;
-    const min = Math.min(...allPrices);
-    const max = Math.max(...allPrices);
-    return { avg, min, max, count: allPrices.length };
-  }, [product, mainHistory, similarProducts, checkedProducts, allOrders, allOpportunities]);
+    const data = Array.from(dateMap.values()).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+    const config: ChartConfig = {};
+    for (const s of allSeries) {
+      const matchingKey = keys.find((k) => k.key === s.key);
+      config[s.key] = { label: s.label, color: matchingKey?.color ?? "hsl(var(--primary))" };
+    }
+
+    return { chartData: data, chartConfig: config, lineKeys: keys };
+  }, [product, mainOps, checkedOpsMap, checkedProducts]);
 
   const handleCopyPath = async (path: string) => {
     try {
@@ -289,54 +343,53 @@ export function ProductDrawer({
         </SheetHeader>
 
         <div className="p-6 space-y-6">
-          {/* Aggregate Stats Widget */}
-          {aggregateStats && (
+          {/* Aggregate Stats */}
+          {stats && (
             <Card className="border-primary/20 bg-primary/5">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Analiza Zbiorcza ({checkedProducts.size + 1} produktów)</CardTitle>
+                <CardTitle className="text-base">
+                  Statystyki {checkedProducts.size > 0 ? `(${checkedProducts.size + 1} produktów)` : ""}
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="grid grid-cols-4 gap-4 text-center">
                   <div>
                     <p className="text-xs text-muted-foreground">Średnia cena</p>
-                    <p className="text-lg font-bold text-foreground">{aggregateStats.avg.toFixed(2)}</p>
+                    <p className="text-lg font-bold text-foreground">{stats.avg.toFixed(2)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Min</p>
-                    <p className="text-lg font-bold text-success">{aggregateStats.min.toFixed(2)}</p>
+                    <p className="text-lg font-bold text-success">{stats.min.toFixed(2)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Max</p>
-                    <p className="text-lg font-bold text-destructive">{aggregateStats.max.toFixed(2)}</p>
+                    <p className="text-lg font-bold text-destructive">{stats.max.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Trend</p>
+                    <div className="flex items-center justify-center gap-1 mt-1">
+                      {aggregateTrend === "up" && <TrendingUp className="h-4 w-4 text-success" />}
+                      {aggregateTrend === "down" && <TrendingDown className="h-4 w-4 text-destructive" />}
+                      {aggregateTrend === "flat" && <Minus className="h-4 w-4 text-muted-foreground" />}
+                      {aggregateTrend === null && <span className="text-muted-foreground">—</span>}
+                    </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Price History Chart */}
+          {/* Dual-line Chart */}
           <Card>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">
                   {checkedProducts.size > 0 ? "Porównanie cenowe" : "Trend cenowy"}
                 </CardTitle>
-                {trend !== null ? (
-                  <div className="flex items-center gap-1">
-                    {trend === "up" && <TrendingUp className="h-4 w-4 text-success" />}
-                    {trend === "down" && <TrendingDown className="h-4 w-4 text-destructive" />}
-                    {trend === "flat" && <Minus className="h-4 w-4 text-muted-foreground" />}
-                    <span
-                      className={`text-xs font-medium ${
-                        trend === "up" ? "text-success" : trend === "down" ? "text-destructive" : "text-muted-foreground"
-                      }`}
-                    >
-                      {trend === "up" ? "Wzrostowy" : trend === "down" ? "Spadkowy" : "Stabilny"}
-                    </span>
-                  </div>
-                ) : (
-                  <span className="text-xs text-muted-foreground">—</span>
-                )}
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="inline-block w-4 h-0.5 bg-primary rounded" /> Zlecenia
+                  <span className="inline-block w-4 h-0.5 rounded" style={{ background: "hsl(25, 95%, 53%)", borderTop: "1px dashed hsl(25, 95%, 53%)" }} /> Szanse
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -366,23 +419,124 @@ export function ProductDrawer({
                         />
                       }
                     />
-                    {activeKeys.length > 1 && (
+                    {lineKeys.length > 1 && (
                       <ChartLegend content={<ChartLegendContent />} />
                     )}
-                    {activeKeys.map((key, i) => (
+                    {lineKeys.map((lk) => (
                       <Line
-                        key={key}
+                        key={lk.key}
                         type="monotone"
-                        dataKey={key}
-                        stroke={PALETTE[i % PALETTE.length]}
-                        strokeWidth={key === "main" ? 2.5 : 1.5}
-                        strokeDasharray={key === "main" ? undefined : "5 5"}
+                        dataKey={lk.key}
+                        stroke={lk.color}
+                        strokeWidth={lk.key.startsWith("order_0") ? 2.5 : 1.5}
+                        strokeDasharray={lk.dash}
                         dot={{ r: 3 }}
                         connectNulls
                       />
                     ))}
                   </LineChart>
                 </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Operations Detail Table */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                Historia Operacji ({allOps.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
+                </div>
+              ) : allOps.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">Brak operacji</p>
+              ) : (
+                <div className="border rounded-lg overflow-hidden max-h-[300px] overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-muted/50">
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Data</th>
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Typ</th>
+                        {checkedProducts.size > 0 && (
+                          <th className="text-left px-3 py-2 font-medium text-muted-foreground">Produkt</th>
+                        )}
+                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">Ilość</th>
+                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">Cena jdn.</th>
+                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">Wartość</th>
+                        <th className="w-8 px-1 py-2 text-center">
+                          <Eye className="h-3.5 w-3.5 mx-auto text-muted-foreground" />
+                        </th>
+                        <th className="w-8 px-1 py-2 text-center">
+                          <Paperclip className="h-3.5 w-3.5 mx-auto text-muted-foreground" />
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allOps.map((op, i) => (
+                        <tr key={i} className="border-t border-border hover:bg-muted/30 transition-colors">
+                          <td className="px-3 py-2 text-muted-foreground">{formatDate(op.date)}</td>
+                          <td className="px-3 py-2">
+                            <Badge variant={op.type === "Zlecenie" ? "default" : "outline"} className="text-xs">
+                              {op.type}
+                            </Badge>
+                          </td>
+                          {checkedProducts.size > 0 && (
+                            <td className="px-3 py-2 text-foreground text-xs max-w-[140px] truncate">
+                              {op.product_name}
+                            </td>
+                          )}
+                          <td className="px-3 py-2 text-right text-foreground">{op.quantity ?? "—"}</td>
+                          <td className="px-3 py-2 text-right font-medium text-foreground">{op.unit_price.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right text-muted-foreground">
+                            {op.value != null ? op.value.toFixed(2) : "—"}
+                          </td>
+                          <td className="px-1 py-2 text-center">
+                            {op.type === "Zlecenie" && op.product_id ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <a
+                                    href={`https://toptech.getprodio.com/product/${op.product_id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center justify-center h-6 w-6 rounded text-primary hover:bg-accent transition-colors"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </a>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="z-50">
+                                  Otwórz w Prodio
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : null}
+                          </td>
+                          <td className="px-1 py-2 text-center">
+                            {op.type === "Zlecenie" && op.sciezka_z ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={() => handleCopyPath(op.sciezka_z!)}
+                                    className="inline-flex items-center justify-center h-6 w-6 rounded text-primary hover:bg-accent transition-colors"
+                                  >
+                                    <Paperclip className="h-3.5 w-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="z-50">
+                                  Kopiuj ścieżkę pliku
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : null}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -440,18 +594,10 @@ export function ProductDrawer({
                         <thead>
                           <tr className="bg-muted/50">
                             <th className="w-8 px-2 py-2" />
-                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">
-                              Nazwa
-                            </th>
-                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">
-                              Data
-                            </th>
-                            <th className="text-right px-3 py-2 font-medium text-muted-foreground">
-                              Cena
-                            </th>
-                            <th className="text-right px-3 py-2 font-medium text-muted-foreground">
-                              Δ
-                            </th>
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">Nazwa</th>
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">Data</th>
+                            <th className="text-right px-3 py-2 font-medium text-muted-foreground">Cena</th>
+                            <th className="text-right px-3 py-2 font-medium text-muted-foreground">Δ</th>
                             <th className="w-8 px-1 py-2 text-center">
                               <Eye className="h-3.5 w-3.5 mx-auto text-muted-foreground" />
                             </th>
@@ -472,19 +618,13 @@ export function ProductDrawer({
                                   onCheckedChange={() => toggleProduct(sp.product_name)}
                                 />
                               </td>
-                              <td className="px-3 py-2 font-medium text-foreground">
-                                {sp.product_name}
-                              </td>
-                              <td className="px-3 py-2 text-muted-foreground">
-                                {sp.date}
-                              </td>
+                              <td className="px-3 py-2 font-medium text-foreground">{sp.product_name}</td>
+                              <td className="px-3 py-2 text-muted-foreground">{sp.date}</td>
                               <td className="px-3 py-2 text-right font-medium text-foreground">
                                 {sp.unit_price.toFixed(2)} PLN
                               </td>
                               <td className="px-3 py-2 text-right">
-                                <Badge variant="outline" className="text-xs">
-                                  {sp.distance}
-                                </Badge>
+                                <Badge variant="outline" className="text-xs">{sp.distance}</Badge>
                               </td>
                               <td className="px-1 py-2 text-center">
                                 {sp.product_id ? (
@@ -499,9 +639,7 @@ export function ProductDrawer({
                                         <Eye className="h-3.5 w-3.5" />
                                       </a>
                                     </TooltipTrigger>
-                                    <TooltipContent side="left" className="z-50">
-                                      Otwórz w Prodio
-                                    </TooltipContent>
+                                    <TooltipContent side="left" className="z-50">Otwórz w Prodio</TooltipContent>
                                   </Tooltip>
                                 ) : null}
                               </td>
@@ -516,9 +654,7 @@ export function ProductDrawer({
                                         <Paperclip className="h-3.5 w-3.5" />
                                       </button>
                                     </TooltipTrigger>
-                                    <TooltipContent side="left" className="z-50">
-                                      Kopiuj ścieżkę pliku
-                                    </TooltipContent>
+                                    <TooltipContent side="left" className="z-50">Kopiuj ścieżkę pliku</TooltipContent>
                                   </Tooltip>
                                 ) : null}
                               </td>
