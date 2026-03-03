@@ -120,7 +120,7 @@ const Index = () => {
         supabase.from("order_history").select("*").order("order_date", { ascending: false }),
         supabase.from("products").select("name, current_price, group_id, sciezka_z"),
         supabase.from("product_groups").select("id, name"),
-        supabase.from("sales_opportunities").select("client_name, opportunity_date, product_name, unit_price, quantity").gt("unit_price", 0).not("unit_price", "is", null).order("opportunity_date", { ascending: false }),
+        supabase.from("sales_opportunities").select("client_name, opportunity_date, product_name, unit_price, quantity").not("product_name", "is", null).neq("product_name", "").not("unit_price", "is", null).gt("unit_price", 0).not("quantity", "is", null).gt("quantity", 0).order("opportunity_date", { ascending: false }),
       ]);
 
       if (ordersRes.error) {

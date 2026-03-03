@@ -20,8 +20,12 @@ const ReportsPage = () => {
         supabase
           .from("sales_opportunities")
           .select("client_name, opportunity_date, product_name, unit_price, quantity")
+          .not("product_name", "is", null)
+          .neq("product_name", "")
+          .not("unit_price", "is", null)
           .gt("unit_price", 0)
-          .not("unit_price", "is", null),
+          .not("quantity", "is", null)
+          .gt("quantity", 0),
       ]);
       setOrders(ordersRes.data ?? []);
       setOpportunities(oppsRes.data ?? []);
