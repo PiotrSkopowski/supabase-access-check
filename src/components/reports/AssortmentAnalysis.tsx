@@ -1,14 +1,16 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
   Search, ArrowUpDown, ArrowUp, ArrowDown, Package, TrendingUp, AlertTriangle,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
 } from "lucide-react";
 
 // ── Threshold for "high offers, zero conversion" warning ──
@@ -33,12 +35,20 @@ interface AssortmentAnalysisProps {
   opportunities: any[];
 }
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+const STORAGE_KEY = "toptech-assortment-pagesize";
+
+const getStoredPageSize = (): number => {
+  try { const v = localStorage.getItem(STORAGE_KEY); return v && PAGE_SIZE_OPTIONS.includes(Number(v) as any) ? Number(v) : 20; } catch { return 20; }
+};
+
 const AssortmentAnalysis = ({ orders, opportunities }: AssortmentAnalysisProps) => {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("total_value");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [clientFilter, setClientFilter] = useState<string>("__all__");
-
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(getStoredPageSize);
   // ── Unique clients for dropdown ──
   const clients = useMemo(() => {
     const set = new Set<string>();
@@ -143,6 +153,20 @@ const AssortmentAnalysis = ({ orders, opportunities }: AssortmentAnalysisProps) 
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("desc"); }
   };
+
+  useEffect(() => { setPage(0); }, [search, sortKey, sortDir, pageSize, clientFilter]);
+
+  const handlePageSizeChange = useCallback((val: string) => {
+    const n = Number(val);
+    setPageSize(n);
+    try { localStorage.setItem(STORAGE_KEY, String(n)); } catch { }
+  }, []);
+
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  const pageRows = useMemo(
+    () => filtered.slice(page * pageSize, (page + 1) * pageSize),
+    [filtered, page, pageSize],
+  );
 
   const SortIcon = ({ col }: { col: SortKey }) => {
     if (sortKey !== col) return <ArrowUpDown className="h-3.5 w-3.5 ml-1 opacity-40" />;
@@ -260,7 +284,7 @@ const AssortmentAnalysis = ({ orders, opportunities }: AssortmentAnalysisProps) 
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((p) => (
+              pageRows.map((p) => (
                 <TableRow
                   key={p.product_name}
                   className={isWarningRow(p) ? "bg-destructive/10 hover:bg-destructive/15" : ""}
@@ -284,6 +308,47 @@ const AssortmentAnalysis = ({ orders, opportunities }: AssortmentAnalysisProps) 
             )}
           </TableBody>
         </Table>
+
+        {/* Pagination */}
+        {filtered.length > 0 && (
+          <div className="flex items-center justify-between border-t px-4 py-3">
+            <p className="text-sm text-muted-foreground">
+              {page * pageSize + 1}–{Math.min((page + 1) * pageSize, filtered.length)} z {filtered.length}
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-muted-foreground whitespace-nowrap">Wierszy:</span>
+                <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+                  <SelectTrigger className="w-[70px] h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAGE_SIZE_OPTIONS.map((n) => (
+                      <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={page === 0} onClick={() => setPage(0)}>
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-muted-foreground px-2">
+                  {page + 1} / {totalPages || 1}
+                </span>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={page >= totalPages - 1} onClick={() => setPage(totalPages - 1)}>
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   );
