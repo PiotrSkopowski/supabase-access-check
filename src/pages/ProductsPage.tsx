@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useOrderHistory, useProducts, useSalesOpportunities } from "@/hooks/useOrdersData";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -158,7 +158,7 @@ const ProductsPage = () => {
     });
   }, [filtered, sortKey, sortDir]);
 
-  useMemo(() => { setPage(0); }, [search, sortKey, sortDir]);
+  useEffect(() => { setPage(0); }, [search, sortKey, sortDir]);
 
   const totalPages = Math.ceil(sorted.length / pageSize);
   const pageRows = sorted.slice(page * pageSize, (page + 1) * pageSize);

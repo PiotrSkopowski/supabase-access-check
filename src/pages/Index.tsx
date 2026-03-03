@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
+
 import { useOrderHistory, useProducts, useProductGroups, useSalesOpportunities } from "@/hooks/useOrdersData";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
