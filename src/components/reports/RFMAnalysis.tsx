@@ -1,12 +1,17 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Search, ArrowUpDown, ArrowUp, ArrowDown, Crown, Heart, AlertTriangle,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
 } from "lucide-react";
 import { differenceInDays } from "date-fns";
 
@@ -41,10 +46,19 @@ interface RFMAnalysisProps {
   orders: any[];
 }
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+const STORAGE_KEY = "toptech-rfm-pagesize";
+
+const getStoredPageSize = (): number => {
+  try { const v = localStorage.getItem(STORAGE_KEY); return v && PAGE_SIZE_OPTIONS.includes(Number(v) as any) ? Number(v) : 20; } catch { return 20; }
+};
+
 const RFMAnalysis = ({ orders }: RFMAnalysisProps) => {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("monetary");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(getStoredPageSize);
 
   const customers = useMemo<CustomerRFM[]>(() => {
     const map = new Map<string, { monetary: number; frequency: number; lastDate: string | null }>();
@@ -114,6 +128,20 @@ const RFMAnalysis = ({ orders }: RFMAnalysisProps) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("desc"); }
   };
+
+  useEffect(() => { setPage(0); }, [search, sortKey, sortDir, pageSize]);
+
+  const handlePageSizeChange = useCallback((val: string) => {
+    const n = Number(val);
+    setPageSize(n);
+    try { localStorage.setItem(STORAGE_KEY, String(n)); } catch { }
+  }, []);
+
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  const pageRows = useMemo(
+    () => filtered.slice(page * pageSize, (page + 1) * pageSize),
+    [filtered, page, pageSize],
+  );
 
   const SortIcon = ({ col }: { col: SortKey }) => {
     if (sortKey !== col) return <ArrowUpDown className="h-3.5 w-3.5 ml-1 opacity-40" />;
@@ -213,7 +241,7 @@ const RFMAnalysis = ({ orders }: RFMAnalysisProps) => {
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((c) => {
+              pageRows.map((c) => {
                 const status = getStatus(c.recency_days);
                 return (
                   <TableRow key={c.client_name}>
@@ -239,6 +267,47 @@ const RFMAnalysis = ({ orders }: RFMAnalysisProps) => {
             )}
           </TableBody>
         </Table>
+
+        {/* Pagination */}
+        {filtered.length > 0 && (
+          <div className="flex items-center justify-between border-t px-4 py-3">
+            <p className="text-sm text-muted-foreground">
+              {page * pageSize + 1}–{Math.min((page + 1) * pageSize, filtered.length)} z {filtered.length}
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-muted-foreground whitespace-nowrap">Wierszy:</span>
+                <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+                  <SelectTrigger className="w-[70px] h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAGE_SIZE_OPTIONS.map((n) => (
+                      <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={page === 0} onClick={() => setPage(0)}>
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-muted-foreground px-2">
+                  {page + 1} / {totalPages || 1}
+                </span>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={page >= totalPages - 1} onClick={() => setPage(totalPages - 1)}>
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   );
