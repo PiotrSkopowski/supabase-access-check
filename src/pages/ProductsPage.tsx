@@ -56,7 +56,7 @@ const ProductsPage = () => {
       const [ordersRes, productsRes, oppsRes] = await Promise.all([
         supabase.from("order_history").select("*").order("order_date", { ascending: false }),
         supabase.from("products").select("name, current_price, group_id"),
-        supabase.from("sales_opportunities").select("client_name, opportunity_date, product_name, unit_price, quantity").gt("unit_price", 0).not("unit_price", "is", null),
+        supabase.from("sales_opportunities").select("client_name, opportunity_date, product_name, unit_price, quantity").not("product_name", "is", null).neq("product_name", "").not("unit_price", "is", null).gt("unit_price", 0).not("quantity", "is", null).gt("quantity", 0),
       ]);
 
       setOrders(ordersRes.data ?? []);
