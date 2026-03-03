@@ -1,37 +1,15 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, Package } from "lucide-react";
 import RFMAnalysis from "@/components/reports/RFMAnalysis";
 import AssortmentAnalysis from "@/components/reports/AssortmentAnalysis";
+import { useOrderHistory, useSalesOpportunities } from "@/hooks/useOrdersData";
 
 const ReportsPage = () => {
-  const [loading, setLoading] = useState(true);
-  const [orders, setOrders] = useState<any[]>([]);
-  const [opportunities, setOpportunities] = useState<any[]>([]);
+  const { data: orders = [], isLoading: loadingOrders } = useOrderHistory();
+  const { data: opportunities = [], isLoading: loadingOpps } = useSalesOpportunities();
 
-  useEffect(() => {
-    (async () => {
-      const [ordersRes, oppsRes] = await Promise.all([
-        supabase
-          .from("order_history")
-          .select("client_name, price, quantity, order_date, product_name, description"),
-        supabase
-          .from("sales_opportunities")
-          .select("client_name, opportunity_date, product_name, unit_price, quantity")
-          .not("product_name", "is", null)
-          .neq("product_name", "")
-          .not("unit_price", "is", null)
-          .gt("unit_price", 0)
-          .not("quantity", "is", null)
-          .gt("quantity", 0),
-      ]);
-      setOrders(ordersRes.data ?? []);
-      setOpportunities(oppsRes.data ?? []);
-      setLoading(false);
-    })();
-  }, []);
+  const loading = loadingOrders || loadingOpps;
 
   if (loading) {
     return (

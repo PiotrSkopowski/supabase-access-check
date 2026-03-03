@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
+import { useState, useMemo, useCallback } from "react";
+import { useOrderHistory, useProducts, useSalesOpportunities } from "@/hooks/useOrdersData";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -35,37 +35,21 @@ type SortKey = "product_name" | "client_name" | "order_count" | "sales_count" | 
 type SortDir = "asc" | "desc";
 
 const ProductsPage = () => {
-  const [loading, setLoading] = useState(true);
+  const { data: orders = [], isLoading: loadingOrders } = useOrderHistory();
+  const { data: products = [], isLoading: loadingProducts } = useProducts("name, current_price, group_id");
+  const { data: opportunities = [], isLoading: loadingOpps } = useSalesOpportunities();
+
+  const loading = loadingOrders || loadingProducts || loadingOpps;
+
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
-  const [orders, setOrders] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-  const [opportunities, setOpportunities] = useState<any[]>([]);
-
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductDrawerData | null>(null);
 
   const pageSize = 20;
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const [ordersRes, productsRes, oppsRes] = await Promise.all([
-        supabase.from("order_history").select("*").order("order_date", { ascending: false }),
-        supabase.from("products").select("name, current_price, group_id"),
-        supabase.from("sales_opportunities").select("client_name, opportunity_date, product_name, unit_price, quantity").not("product_name", "is", null).neq("product_name", "").not("unit_price", "is", null).gt("unit_price", 0).not("quantity", "is", null).gt("quantity", 0),
-      ]);
-
-      setOrders(ordersRes.data ?? []);
-      setProducts(productsRes.data ?? []);
-      setOpportunities(oppsRes.data ?? []);
-      setLoading(false);
-    };
-    load();
-  }, []);
 
   // Build aggregated product list
   const aggregated = useMemo<AggregatedProduct[]>(() => {
@@ -174,7 +158,7 @@ const ProductsPage = () => {
     });
   }, [filtered, sortKey, sortDir]);
 
-  useEffect(() => { setPage(0); }, [search, sortKey, sortDir]);
+  useMemo(() => { setPage(0); }, [search, sortKey, sortDir]);
 
   const totalPages = Math.ceil(sorted.length / pageSize);
   const pageRows = sorted.slice(page * pageSize, (page + 1) * pageSize);
