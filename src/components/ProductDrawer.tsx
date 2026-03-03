@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Search, TrendingUp, TrendingDown, Minus, Eye, Paperclip } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Minus, Eye, Paperclip, ChevronDown, User, Hash, CalendarDays } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Collapsible, CollapsibleContent, CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   ChartContainer,
   ChartTooltip,
@@ -130,7 +133,6 @@ function getStrictOperations(
     });
   }
 
-  // For opportunities, match by product_name substring (as per existing logic)
   for (const s of allOpportunities) {
     const sName = norm(s.product_name);
     if (!sName.includes(pName) && !pName.includes(sName)) continue;
@@ -175,6 +177,7 @@ export function ProductDrawer({
   const [sensitivity, setSensitivity] = useState(3);
   const [showSimilar, setShowSimilar] = useState(false);
   const [checkedProducts, setCheckedProducts] = useState<Set<string>>(new Set());
+  const [chartOpen, setChartOpen] = useState(false);
 
   // 1. Strict operations for main product
   const mainOps = useMemo<OperationRow[]>(
@@ -183,6 +186,19 @@ export function ProductDrawer({
   );
 
   const mainTrend = useMemo(() => computeTrend(mainOps), [mainOps]);
+
+  // Product info computed from mainOps
+  const productInfo = useMemo(() => {
+    const orderOps = mainOps.filter((o) => o.type === "Zlecenie");
+    const totalQty = orderOps.reduce((sum, o) => sum + (o.quantity ?? 0), 0);
+    const allDates = mainOps.map((o) => o.date).filter(Boolean).sort();
+    const firstDate = allDates.length > 0 ? allDates[0] : null;
+    return {
+      totalHistoricalQty: totalQty,
+      historicalOrderCount: orderOps.length,
+      firstOperationDate: firstDate,
+    };
+  }, [mainOps]);
 
   // Similar products (Levenshtein)
   const similarProducts = useMemo<SimilarProduct[]>(() => {
@@ -246,7 +262,7 @@ export function ProductDrawer({
     return combined;
   }, [mainOps, checkedOpsMap]);
 
-  // Aggregate trend (all selected products)
+  // Aggregate trend
   const aggregateTrend = useMemo(() => {
     if (checkedProducts.size === 0) return mainTrend;
     return computeTrend(allOps);
@@ -260,14 +276,12 @@ export function ProductDrawer({
     return { avg, min: Math.min(...prices), max: Math.max(...prices), count: prices.length };
   }, [allOps]);
 
-  // 2. Chart data: dual-line (orders vs opportunities) per product
+  // Chart data
   const { chartData, chartConfig, lineKeys } = useMemo(() => {
     if (!product) return { chartData: [], chartConfig: {} as ChartConfig, lineKeys: [] as { key: string; color: string; dash?: string }[] };
 
     const productNames = [product.product_name, ...Array.from(checkedProducts)];
     const allSeries: { key: string; label: string; ops: OperationRow[] }[] = [];
-
-    // For each product, create two series: orders and opportunities
     const keys: { key: string; color: string; dash?: string }[] = [];
 
     productNames.forEach((pn, idx) => {
@@ -289,7 +303,6 @@ export function ProductDrawer({
       }
     });
 
-    // Merge into timeline
     const dateMap = new Map<string, Record<string, any>>();
     for (const s of allSeries) {
       for (const o of s.ops) {
@@ -335,15 +348,10 @@ export function ProductDrawer({
           {product.description && (
             <p className="text-sm text-muted-foreground mt-1">{product.description}</p>
           )}
-          {product.client_name && (
-            <Badge variant="secondary" className="mt-2 w-fit">
-              {product.client_name}
-            </Badge>
-          )}
         </SheetHeader>
 
         <div className="p-6 space-y-6">
-          {/* Aggregate Stats */}
+          {/* 1. Statystyki */}
           {stats && (
             <Card className="border-primary/20 bg-primary/5">
               <CardHeader className="pb-2">
@@ -379,68 +387,175 @@ export function ProductDrawer({
             </Card>
           )}
 
-          {/* Dual-line Chart */}
+          {/* 2. NEW: Product Info Box */}
           <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">
-                  {checkedProducts.size > 0 ? "Porównanie cenowe" : "Trend cenowy"}
-                </CardTitle>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="inline-block w-4 h-0.5 bg-primary rounded" /> Zlecenia
-                  <span className="inline-block w-4 h-0.5 rounded" style={{ background: "hsl(25, 95%, 53%)", borderTop: "1px dashed hsl(25, 95%, 53%)" }} /> Szanse
+            <CardContent className="pt-5 pb-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-primary/10 shrink-0">
+                    <User className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">Klient</p>
+                    <p className="text-sm font-semibold text-foreground truncate">
+                      {product.client_name || "—"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-primary/10 shrink-0">
+                    <Hash className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Zlecono historycznie</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {productInfo.historicalOrderCount > 0
+                        ? `${productInfo.totalHistoricalQty} szt. (${productInfo.historicalOrderCount} zleceń)`
+                        : "—"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-primary/10 shrink-0">
+                    <CalendarDays className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Pierwsza operacja</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {productInfo.firstOperationDate ? formatDate(productInfo.firstOperationDate) : "—"}
+                    </p>
+                  </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* 3. Smart Match / Podobne wyceny (MOVED UP) */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">
+                Podobne wyceny u tego samego klienta
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              {loading ? (
-                <Skeleton className="h-[220px] w-full" />
-              ) : chartData.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  Brak danych cenowych dla tego produktu
-                </p>
-              ) : (
-                <ChartContainer config={chartConfig} className="h-[250px] w-full">
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="date"
-                      tickFormatter={(v) => {
-                        const d = new Date(v);
-                        return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`;
-                      }}
-                      fontSize={11}
-                    />
-                    <YAxis fontSize={11} />
-                    <ChartTooltip
-                      content={
-                        <ChartTooltipContent
-                          labelFormatter={(v) => formatDate(String(v))}
-                        />
-                      }
-                    />
-                    {lineKeys.length > 1 && (
-                      <ChartLegend content={<ChartLegendContent />} />
-                    )}
-                    {lineKeys.map((lk) => (
-                      <Line
-                        key={lk.key}
-                        type="monotone"
-                        dataKey={lk.key}
-                        stroke={lk.color}
-                        strokeWidth={lk.key.startsWith("order_0") ? 2.5 : 1.5}
-                        strokeDasharray={lk.dash}
-                        dot={{ r: 3 }}
-                        connectNulls
-                      />
-                    ))}
-                  </LineChart>
-                </ChartContainer>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-muted-foreground whitespace-nowrap">
+                    Czułość (max. różnica znaków):
+                  </label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={sensitivity}
+                    onChange={(e) => setSensitivity(Number(e.target.value) || 3)}
+                    className="w-20 h-9"
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setShowSimilar(true);
+                    setCheckedProducts(new Set());
+                  }}
+                  className="gap-1.5"
+                >
+                  <Search className="h-3.5 w-3.5" />
+                  Szukaj podobnych
+                </Button>
+              </div>
+
+              {showSimilar && (
+                <div className="mt-3">
+                  {loading ? (
+                    <div className="space-y-2">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton key={i} className="h-10 w-full" />
+                      ))}
+                    </div>
+                  ) : similarProducts.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      Nie znaleziono podobnych produktów (próg: {sensitivity} znaków)
+                    </p>
+                  ) : (
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-muted/50">
+                            <th className="w-8 px-2 py-2" />
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">Nazwa</th>
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">Data</th>
+                            <th className="text-right px-3 py-2 font-medium text-muted-foreground">Cena</th>
+                            <th className="text-right px-3 py-2 font-medium text-muted-foreground">Δ</th>
+                            <th className="w-8 px-1 py-2 text-center">
+                              <Eye className="h-3.5 w-3.5 mx-auto text-muted-foreground" />
+                            </th>
+                            <th className="w-8 px-1 py-2 text-center">
+                              <Paperclip className="h-3.5 w-3.5 mx-auto text-muted-foreground" />
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {similarProducts.map((sp, i) => (
+                            <tr key={i} className="border-t border-border hover:bg-muted/30 transition-colors">
+                              <td className="px-2 py-2">
+                                <Checkbox
+                                  checked={checkedProducts.has(sp.product_name)}
+                                  onCheckedChange={() => toggleProduct(sp.product_name)}
+                                />
+                              </td>
+                              <td className="px-3 py-2 font-medium text-foreground">{sp.product_name}</td>
+                              <td className="px-3 py-2 text-muted-foreground">{sp.date}</td>
+                              <td className="px-3 py-2 text-right font-medium text-foreground">
+                                {sp.unit_price.toFixed(2)} PLN
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <Badge variant="outline" className="text-xs">{sp.distance}</Badge>
+                              </td>
+                              <td className="px-1 py-2 text-center">
+                                {sp.product_id ? (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <a
+                                        href={`https://toptech.getprodio.com/product/${sp.product_id}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center justify-center h-6 w-6 rounded text-primary hover:bg-accent transition-colors"
+                                      >
+                                        <Eye className="h-3.5 w-3.5" />
+                                      </a>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left" className="z-50">Otwórz w Prodio</TooltipContent>
+                                  </Tooltip>
+                                ) : null}
+                              </td>
+                              <td className="px-1 py-2 text-center">
+                                {sp.sciezka_z ? (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        onClick={() => handleCopyPath(sp.sciezka_z!)}
+                                        className="inline-flex items-center justify-center h-6 w-6 rounded text-primary hover:bg-accent transition-colors"
+                                      >
+                                        <Paperclip className="h-3.5 w-3.5" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left" className="z-50">Kopiuj ścieżkę pliku</TooltipContent>
+                                  </Tooltip>
+                                ) : null}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Operations Detail Table */}
+          {/* 4. Historia Operacji */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">
@@ -541,133 +656,77 @@ export function ProductDrawer({
             </CardContent>
           </Card>
 
-          {/* Smart Match */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">
-                Podobne wyceny u tego samego klienta
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <label className="text-sm text-muted-foreground whitespace-nowrap">
-                    Czułość (max. różnica znaków):
-                  </label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={sensitivity}
-                    onChange={(e) => setSensitivity(Number(e.target.value) || 3)}
-                    className="w-20 h-9"
-                  />
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setShowSimilar(true);
-                    setCheckedProducts(new Set());
-                  }}
-                  className="gap-1.5"
-                >
-                  <Search className="h-3.5 w-3.5" />
-                  Szukaj podobnych
-                </Button>
-              </div>
-
-              {showSimilar && (
-                <div className="mt-3">
-                  {loading ? (
-                    <div className="space-y-2">
-                      {Array.from({ length: 3 }).map((_, i) => (
-                        <Skeleton key={i} className="h-10 w-full" />
-                      ))}
+          {/* 5. Collapsible Chart */}
+          <Collapsible open={chartOpen} onOpenChange={setChartOpen}>
+            <Card>
+              <CollapsibleTrigger asChild>
+                <button className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/30 transition-colors rounded-t-lg">
+                  <span className="text-base font-semibold text-foreground">
+                    {checkedProducts.size > 0 ? "Porównanie cenowe" : "Trend cenowy"}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="inline-block w-4 h-0.5 bg-primary rounded" /> Zlecenia
+                      <span className="inline-block w-4 h-0.5 rounded" style={{ background: "hsl(25, 95%, 53%)", borderTop: "1px dashed hsl(25, 95%, 53%)" }} /> Szanse
                     </div>
-                  ) : similarProducts.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      Nie znaleziono podobnych produktów (próg: {sensitivity} znaków)
+                    <ChevronDown
+                      className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
+                        chartOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </div>
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="pt-0">
+                  {loading ? (
+                    <Skeleton className="h-[220px] w-full" />
+                  ) : chartData.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      Brak danych cenowych dla tego produktu
                     </p>
                   ) : (
-                    <div className="border rounded-lg overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-muted/50">
-                            <th className="w-8 px-2 py-2" />
-                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">Nazwa</th>
-                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">Data</th>
-                            <th className="text-right px-3 py-2 font-medium text-muted-foreground">Cena</th>
-                            <th className="text-right px-3 py-2 font-medium text-muted-foreground">Δ</th>
-                            <th className="w-8 px-1 py-2 text-center">
-                              <Eye className="h-3.5 w-3.5 mx-auto text-muted-foreground" />
-                            </th>
-                            <th className="w-8 px-1 py-2 text-center">
-                              <Paperclip className="h-3.5 w-3.5 mx-auto text-muted-foreground" />
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {similarProducts.map((sp, i) => (
-                            <tr
-                              key={i}
-                              className="border-t border-border hover:bg-muted/30 transition-colors"
-                            >
-                              <td className="px-2 py-2">
-                                <Checkbox
-                                  checked={checkedProducts.has(sp.product_name)}
-                                  onCheckedChange={() => toggleProduct(sp.product_name)}
-                                />
-                              </td>
-                              <td className="px-3 py-2 font-medium text-foreground">{sp.product_name}</td>
-                              <td className="px-3 py-2 text-muted-foreground">{sp.date}</td>
-                              <td className="px-3 py-2 text-right font-medium text-foreground">
-                                {sp.unit_price.toFixed(2)} PLN
-                              </td>
-                              <td className="px-3 py-2 text-right">
-                                <Badge variant="outline" className="text-xs">{sp.distance}</Badge>
-                              </td>
-                              <td className="px-1 py-2 text-center">
-                                {sp.product_id ? (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <a
-                                        href={`https://toptech.getprodio.com/product/${sp.product_id}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center justify-center h-6 w-6 rounded text-primary hover:bg-accent transition-colors"
-                                      >
-                                        <Eye className="h-3.5 w-3.5" />
-                                      </a>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="left" className="z-50">Otwórz w Prodio</TooltipContent>
-                                  </Tooltip>
-                                ) : null}
-                              </td>
-                              <td className="px-1 py-2 text-center">
-                                {sp.sciezka_z ? (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button
-                                        onClick={() => handleCopyPath(sp.sciezka_z!)}
-                                        className="inline-flex items-center justify-center h-6 w-6 rounded text-primary hover:bg-accent transition-colors"
-                                      >
-                                        <Paperclip className="h-3.5 w-3.5" />
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="left" className="z-50">Kopiuj ścieżkę pliku</TooltipContent>
-                                  </Tooltip>
-                                ) : null}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <ChartContainer config={chartConfig} className="h-[250px] w-full">
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="date"
+                          tickFormatter={(v) => {
+                            const d = new Date(v);
+                            return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`;
+                          }}
+                          fontSize={11}
+                        />
+                        <YAxis fontSize={11} />
+                        <ChartTooltip
+                          content={
+                            <ChartTooltipContent
+                              labelFormatter={(v) => formatDate(String(v))}
+                            />
+                          }
+                        />
+                        {lineKeys.length > 1 && (
+                          <ChartLegend content={<ChartLegendContent />} />
+                        )}
+                        {lineKeys.map((lk) => (
+                          <Line
+                            key={lk.key}
+                            type="monotone"
+                            dataKey={lk.key}
+                            stroke={lk.color}
+                            strokeWidth={lk.key.startsWith("order_0") ? 2.5 : 1.5}
+                            strokeDasharray={lk.dash}
+                            dot={{ r: 3 }}
+                            connectNulls
+                          />
+                        ))}
+                      </LineChart>
+                    </ChartContainer>
                   )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
         </div>
       </SheetContent>
     </Sheet>
