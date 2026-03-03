@@ -53,7 +53,8 @@ const getStoredPageSize = (): number => {
   try { const v = localStorage.getItem(STORAGE_KEY); return v && PAGE_SIZE_OPTIONS.includes(Number(v) as any) ? Number(v) : 20; } catch { return 20; }
 };
 
-const RFMAnalysis = ({ orders }: RFMAnalysisProps) => {
+const RFMAnalysis = ({ orders: rawOrders }: RFMAnalysisProps) => {
+  const orders = rawOrders ?? [];
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("monetary");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
