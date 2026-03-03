@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useOrderHistory, useProducts, useProductGroups, useSalesOpportunities } from "@/hooks/useOrdersData";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -84,7 +85,6 @@ const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
 const Index = () => {
   const [allRows, setAllRows] = useState<ResultRow[]>([]);
   const [enriching, setEnriching] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(getStoredPageSize);
@@ -110,78 +110,69 @@ const Index = () => {
 
   const show = useCallback((col: ToggleableColumn) => !hiddenColumns.has(col), [hiddenColumns]);
 
-  // Data loading - identical logic, not modified
+  // React Query hooks for cached data fetching
+  const { data: ordersData, isLoading: loadingOrders, error: ordersError } = useOrderHistory();
+  const { data: productsData = [], isLoading: loadingProducts } = useProducts("name, current_price, group_id, sciezka_z");
+  const { data: groupsData = [], isLoading: loadingGroups } = useProductGroups();
+  const { data: oppsData = [], isLoading: loadingOpps } = useSalesOpportunities();
+
+  const loading = loadingOrders || loadingProducts || loadingGroups || loadingOpps;
+
+  // Process data when queries complete
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError(null);
+    if (loading) return;
 
-      const [ordersRes, productsRes, groupsRes, oppsRes] = await Promise.all([
-        supabase.from("order_history").select("*").order("order_date", { ascending: false }),
-        supabase.from("products").select("name, current_price, group_id, sciezka_z"),
-        supabase.from("product_groups").select("id, name"),
-        supabase.from("sales_opportunities").select("client_name, opportunity_date, product_name, unit_price, quantity").not("product_name", "is", null).neq("product_name", "").not("unit_price", "is", null).gt("unit_price", 0).not("quantity", "is", null).gt("quantity", 0).order("opportunity_date", { ascending: false }),
-      ]);
+    if (ordersError) {
+      setError(`Błąd order_history: ${(ordersError as Error).message}`);
+      setAllRows([]);
+      return;
+    }
 
-      if (ordersRes.error) {
-        setError(`Błąd order_history: ${ordersRes.error.message}`);
-        setAllRows([]);
-        setLoading(false);
-        return;
+    if (!ordersData || ordersData.length === 0) {
+      setError("BŁĄD: Tabela order_history jest pusta lub zablokowana przez RLS");
+      setAllRows([]);
+      return;
+    }
+
+    setError(null);
+
+    const groupMap = new Map<string, string>();
+    for (const g of groupsData) {
+      if (g.id && g.name) groupMap.set(g.id, g.name);
+    }
+
+    const productMap = new Map<string, { current_price: number | null; group_name: string | null; sciezka_z: string | null }>();
+    for (const p of productsData) {
+      if (p.name) {
+        productMap.set(p.name.trim().toLowerCase(), {
+          current_price: p.current_price,
+          group_name: p.group_id ? (groupMap.get(p.group_id) ?? null) : null,
+          sciezka_z: p.sciezka_z ?? null,
+        });
       }
+    }
 
-      if (!ordersRes.data || ordersRes.data.length === 0) {
-        setError("BŁĄD: Tabela order_history jest pusta lub zablokowana przez RLS");
-        setAllRows([]);
-        setLoading(false);
-        return;
-      }
+    const joined: ResultRow[] = ordersData.map((o: any) => {
+      const key = o.product_name?.trim().toLowerCase() || "";
+      const catalog = productMap.get(key);
+      return {
+        ...o,
+        catalog_price: catalog?.current_price ?? null,
+        group_name: catalog?.group_name ?? null,
+        product_matched: !!catalog,
+        sciezka_z: catalog?.sciezka_z ?? null,
+        computed_opportunity_price: null,
+        computed_opportunities: [] as SalesOpportunity[],
+      };
+    });
 
-      const groupMap = new Map<string, string>();
-      if (groupsRes.data) {
-        for (const g of groupsRes.data) {
-          if (g.id && g.name) groupMap.set(g.id, g.name);
-        }
-      }
+    setAllRows(joined);
 
-      const productMap = new Map<string, { current_price: number | null; group_name: string | null; sciezka_z: string | null }>();
-      if (productsRes.data) {
-        for (const p of productsRes.data) {
-          if (p.name) {
-            productMap.set(p.name.trim().toLowerCase(), {
-              current_price: p.current_price,
-              group_name: p.group_id ? (groupMap.get(p.group_id) ?? null) : null,
-              sciezka_z: p.sciezka_z ?? null,
-            });
-          }
-        }
-      }
-
-      const joined: ResultRow[] = ordersRes.data.map((o: any) => {
-        const key = o.product_name?.trim().toLowerCase() || "";
-        const catalog = productMap.get(key);
-        return {
-          ...o,
-          catalog_price: catalog?.current_price ?? null,
-          group_name: catalog?.group_name ?? null,
-          product_matched: !!catalog,
-          sciezka_z: catalog?.sciezka_z ?? null,
-          computed_opportunity_price: null,
-          computed_opportunities: [] as SalesOpportunity[],
-        };
-      });
-
-      setAllRows(joined);
-      setLoading(false);
-
-      if (oppsRes.data && oppsRes.data.length > 0) {
-        setRawOpps(oppsRes.data as SalesOpportunity[]);
-        setPendingOpps(oppsRes.data as SalesOpportunity[]);
-      }
-    };
-
-    load();
-  }, []);
+    if (oppsData.length > 0) {
+      setRawOpps(oppsData as SalesOpportunity[]);
+      setPendingOpps(oppsData as SalesOpportunity[]);
+    }
+  }, [loading, ordersData, productsData, groupsData, oppsData, ordersError]);
 
   // Async enrichment - identical logic, not modified
   useEffect(() => {
