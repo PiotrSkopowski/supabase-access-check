@@ -465,11 +465,16 @@ const Index = () => {
     setSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke("sync_prodio_orders");
+      console.log("[SYNC] Response data:", JSON.stringify(data));
+      console.log("[SYNC] Response error:", error);
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success(`Synchronizacja zakończona: pobrano ${data.fetched} zleceń, zapisano ${data.upserted}.`);
-      queryClient.invalidateQueries({ queryKey: ["order_history"] });
+      const count = data?.upserted ?? data?.count ?? "?";
+      toast.success(`Synchronizacja zakończona: pobrano ${data?.fetched ?? "?"} zleceń, zapisano ${count}.`);
+      await queryClient.invalidateQueries({ queryKey: ["order_history"] });
+      await queryClient.refetchQueries({ queryKey: ["order_history"] });
     } catch (err: any) {
+      console.error("[SYNC] Error:", err);
       toast.error(`Błąd synchronizacji: ${err.message}`);
     } finally {
       setSyncing(false);
