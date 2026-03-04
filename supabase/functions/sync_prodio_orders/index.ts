@@ -6,37 +6,27 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-async function fetchAllOrders(apiToken: string): Promise<any[]> {
-  const allOrders: any[] = [];
-  let page = 1;
-  const perPage = 100;
+async function fetchRecentOrders(apiToken: string, limit: number = 10): Promise<any[]> {
+  const url = `https://toptech.getprodio.com/api/orders?api_token=${apiToken}&page=1&per_page=${limit}`;
+  console.log(`[PRODIO] Łączę z API Prodio... URL: ${url.replace(apiToken, '***')}`);
 
-  while (true) {
-    const res = await fetch(
-      `https://toptech.getprodio.com/api/orders?api_token=${apiToken}&page=${page}&per_page=${perPage}`
-    );
+  const res = await fetch(url);
+  console.log(`[PRODIO] Odpowiedź API: status ${res.status}`);
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Błąd API Prodio: ${res.status} – ${text}`);
-    }
-
-    const orders = await res.json();
-
-    if (!Array.isArray(orders) || orders.length === 0) {
-      break;
-    }
-
-    allOrders.push(...orders);
-
-    if (orders.length < perPage) {
-      break;
-    }
-
-    page++;
+  if (!res.ok) {
+    const text = await res.text();
+    console.error(`[PRODIO] Błąd API: ${text}`);
+    throw new Error(`Błąd API Prodio: ${res.status} – ${text}`);
   }
 
-  return allOrders;
+  const orders = await res.json();
+  console.log(`[PRODIO] Otrzymano dane: ${Array.isArray(orders) ? orders.length : 'nie-tablica'} rekordów`);
+
+  if (!Array.isArray(orders)) {
+    throw new Error(`Nieoczekiwany format odpowiedzi API Prodio`);
+  }
+
+  return orders;
 }
 
 Deno.serve(async (req) => {
