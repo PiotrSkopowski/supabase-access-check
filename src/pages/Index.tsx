@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
 import { useOrderHistory, useProducts, useProductGroups, useSalesOpportunities } from "@/hooks/useOrdersData";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -11,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Eye, AlertTriangle, ChevronLeft, ChevronRight, Paperclip, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Eye, AlertTriangle, ChevronLeft, ChevronRight, Paperclip, ArrowUp, ArrowDown, ArrowUpDown, RefreshCw } from "lucide-react";
 import { OrderFilters, EMPTY_FILTERS, type FilterState, type ToggleableColumn } from "@/components/OrderFilters";
 import { SalesOpportunityCell, type SalesOpportunity } from "@/components/SalesOpportunityCell";
 import { ProductDrawer, type ProductDrawerData } from "@/components/ProductDrawer";
@@ -83,6 +84,8 @@ const fuzzyClientMatch = (a: string, b: string): boolean => {
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
 
 const Index = () => {
+  const queryClient = useQueryClient();
+  const [syncing, setSyncing] = useState(false);
   const [allRows, setAllRows] = useState<ResultRow[]>([]);
   const [enriching, setEnriching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -458,18 +461,39 @@ const Index = () => {
 
   const hasProdioLink = (row: ResultRow) => !!row.product_id;
 
+  const handleSyncProdio = useCallback(async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync_prodio_orders");
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Synchronizacja zakończona: pobrano ${data.fetched} zleceń, zapisano ${data.upserted}.`);
+      queryClient.invalidateQueries({ queryKey: ["order_history"] });
+    } catch (err: any) {
+      toast.error(`Błąd synchronizacji: ${err.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  }, [queryClient]);
+
   // Dynamic col count for skeleton/empty rows
   const visibleColCount = 5 + (show("group_name") ? 1 : 0) + (show("client_name") ? 1 : 0) + (show("order_date") ? 1 : 0) + (show("quantity") ? 1 : 0) + (show("price") ? 1 : 0);
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Historia Zleceń</h1>
-        <p className="text-muted-foreground mt-1">
-          {allRows.length > 0
-            ? `${filteredRows.length} z ${allRows.length} zleceń · Strona ${page + 1} z ${Math.max(totalPages, 1)}`
-            : "Ładowanie danych…"}
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Historia Zleceń</h1>
+          <p className="text-muted-foreground mt-1">
+            {allRows.length > 0
+              ? `${filteredRows.length} z ${allRows.length} zleceń · Strona ${page + 1} z ${Math.max(totalPages, 1)}`
+              : "Ładowanie danych…"}
+          </p>
+        </div>
+        <Button onClick={handleSyncProdio} disabled={syncing} variant="outline" className="gap-2">
+          <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+          {syncing ? "Trwa synchronizacja…" : "Aktualizuj dane z Prodio"}
+        </Button>
       </div>
 
       {error && (
