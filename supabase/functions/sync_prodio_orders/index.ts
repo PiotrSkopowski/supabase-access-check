@@ -6,6 +6,39 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+async function fetchAllOrders(apiToken: string): Promise<any[]> {
+  const allOrders: any[] = [];
+  let page = 1;
+  const perPage = 100;
+
+  while (true) {
+    const res = await fetch(
+      `https://toptech.getprodio.com/api/orders?api_token=${apiToken}&page=${page}&per_page=${perPage}`
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Błąd API Prodio: ${res.status} – ${text}`);
+    }
+
+    const orders = await res.json();
+
+    if (!Array.isArray(orders) || orders.length === 0) {
+      break;
+    }
+
+    allOrders.push(...orders);
+
+    if (orders.length < perPage) {
+      break;
+    }
+
+    page++;
+  }
+
+  return allOrders;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -20,67 +53,55 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch orders from Prodio API
-    const prodioRes = await fetch(
-      `https://toptech.getprodio.com/api/orders?api_token=${PRODIO_API_TOKEN}`
-    );
+    const prodioOrders = await fetchAllOrders(PRODIO_API_TOKEN);
 
-    if (!prodioRes.ok) {
-      const text = await prodioRes.text();
-      return new Response(
-        JSON.stringify({ error: `Błąd API Prodio: ${prodioRes.status} – ${text}` }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const prodioOrders = await prodioRes.json();
-
-    if (!Array.isArray(prodioOrders)) {
-      return new Response(
-        JSON.stringify({ error: "Odpowiedź z Prodio nie jest tablicą." }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Map Prodio fields to order_history schema
-    const mappedOrders = prodioOrders.map((o: any) => ({
-      prodio_order_id: String(o.id),
-      client_id: o.client_id ?? null,
-      client_name: o.client_name ?? null,
-      product_id: o.product_id ?? null,
-      product_name: o.product_name ?? null,
-      product_group: o.product_group ?? null,
-      product_group_name: o.product_group_name ?? null,
-      price: o.price != null ? Number(o.price) : null,
-      currency: o.currency ?? null,
-      order_date: o.create_date ?? null,
-      quantity: o.total != null ? Number(o.total) : null,
-      description: o.weight ?? null,
-      source: "PRODIO",
-    }));
-
-    // Upsert to Supabase
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data, error } = await supabase
-      .from("order_history")
-      .upsert(mappedOrders, { onConflict: "prodio_order_id" })
-      .select("id");
+    // Process in batches of 500 to avoid memory spikes
+    const BATCH_SIZE = 500;
+    let totalUpserted = 0;
 
-    if (error) {
-      return new Response(
-        JSON.stringify({ error: `Błąd zapisu do bazy: ${error.message}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    for (let i = 0; i < prodioOrders.length; i += BATCH_SIZE) {
+      const batch = prodioOrders.slice(i, i + BATCH_SIZE);
+
+      const mappedOrders = batch.map((o: any) => ({
+        prodio_order_id: String(o.id),
+        client_id: o.client_id ?? null,
+        client_name: o.client_name ?? null,
+        product_id: o.product_id ?? null,
+        product_name: o.product_name ?? null,
+        product_group: o.product_group ?? null,
+        product_group_name: o.product_group_name ?? null,
+        price: o.price != null ? Number(o.price) : null,
+        currency: o.currency ?? null,
+        order_date: o.create_date ?? null,
+        quantity: o.total != null ? Number(o.total) : null,
+        description: o.weight ?? null,
+        source: "PRODIO",
+      }));
+
+      const { data, error } = await supabase
+        .from("order_history")
+        .upsert(mappedOrders, { onConflict: "prodio_order_id" })
+        .select("id");
+
+      if (error) {
+        return new Response(
+          JSON.stringify({ error: `Błąd zapisu do bazy (batch ${i / BATCH_SIZE + 1}): ${error.message}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      totalUpserted += data?.length ?? 0;
     }
 
     return new Response(
       JSON.stringify({
         success: true,
         fetched: prodioOrders.length,
-        upserted: data?.length ?? 0,
+        upserted: totalUpserted,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
