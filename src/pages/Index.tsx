@@ -345,6 +345,13 @@ const Index = () => {
     return allRows.filter((r) => {
       // Jeśli cena (price) wynosi 0, jest pusta (null) lub niezdefiniowana (undefined) - nie pokazuj tego wiersza
       if (!r.price || r.price === 0) return false;
+      // Blokada klientów testowych i produktów próbnych
+  const forbiddenNames = ['fly4u', 'sky rocket', 'test'];
+  const client = (r.client_name || "").toLowerCase();
+  const product = (r.product_name || "").toLowerCase();
+
+  if (forbiddenNames.some(name => client.includes(name) || product.includes(name))) {
+    return false;
       if (filters.clientName && r.client_name !== filters.clientName) return false;
       if (filters.productName && r.product_name !== filters.productName) return false;
       if (filters.groupName && r.group_name !== filters.groupName) return false;
