@@ -2,17 +2,23 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useOrderHistory, useProducts, useProductGroups, useSalesOpportunities } from "@/hooks/useOrdersData";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  Tooltip, TooltipContent, TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Eye, AlertTriangle, ChevronLeft, ChevronRight, Paperclip, ArrowUp, ArrowDown, ArrowUpDown, RefreshCw } from "lucide-react";
+  Eye,
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Paperclip,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  RefreshCw,
+} from "lucide-react";
 import { OrderFilters, EMPTY_FILTERS, type FilterState, type ToggleableColumn } from "@/components/OrderFilters";
 import { SalesOpportunityCell, type SalesOpportunity } from "@/components/SalesOpportunityCell";
 import { ProductDrawer, type ProductDrawerData } from "@/components/ProductDrawer";
@@ -26,7 +32,7 @@ const getStoredPageSize = (): number => {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
     if (v && PAGE_SIZE_OPTIONS.includes(Number(v) as any)) return Number(v);
-  } catch { }
+  } catch {}
   return 20;
 };
 
@@ -34,7 +40,7 @@ const getStoredHiddenCols = (): Set<ToggleableColumn> => {
   try {
     const v = localStorage.getItem(COL_VIS_KEY);
     if (v) return new Set(JSON.parse(v) as ToggleableColumn[]);
-  } catch { }
+  } catch {}
   return new Set();
 };
 
@@ -59,16 +65,28 @@ interface ResultRow extends OrderRow {
   computed_opportunities: SalesOpportunity[];
 }
 
-type SortKey = "product_name" | "group_name" | "client_name" | "order_date" | "quantity" | "price" | "catalog_price" | "diff" | "szansa" | "prodio" | "plik";
+type SortKey =
+  | "product_name"
+  | "group_name"
+  | "client_name"
+  | "order_date"
+  | "quantity"
+  | "price"
+  | "catalog_price"
+  | "diff"
+  | "szansa"
+  | "prodio"
+  | "plik";
 type SortDir = "asc" | "desc";
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("pl-PL", {
-    day: "2-digit", month: "2-digit", year: "numeric",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   });
 
-const formatPrice = (val: number, currency?: string | null) =>
-  `${val.toFixed(2)} ${currency || "PLN"}`;
+const formatPrice = (val: number, currency?: string | null) => `${val.toFixed(2)} ${currency || "PLN"}`;
 
 const getDiff = (row: ResultRow): number | null => {
   if (row.price == null || row.catalog_price == null || row.catalog_price === 0) return null;
@@ -105,8 +123,11 @@ const Index = () => {
   const toggleColumn = useCallback((col: ToggleableColumn) => {
     setHiddenColumns((prev) => {
       const next = new Set(prev);
-      if (next.has(col)) next.delete(col); else next.add(col);
-      try { localStorage.setItem(COL_VIS_KEY, JSON.stringify([...next])); } catch { }
+      if (next.has(col)) next.delete(col);
+      else next.add(col);
+      try {
+        localStorage.setItem(COL_VIS_KEY, JSON.stringify([...next]));
+      } catch {}
       return next;
     });
   }, []);
@@ -115,7 +136,9 @@ const Index = () => {
 
   // React Query hooks for cached data fetching
   const { data: ordersData, isLoading: loadingOrders, error: ordersError } = useOrderHistory();
-  const { data: productsData = [], isLoading: loadingProducts } = useProducts("name, current_price, group_id, sciezka_z");
+  const { data: productsData = [], isLoading: loadingProducts } = useProducts(
+    "name, current_price, group_id, sciezka_z",
+  );
   const { data: groupsData = [], isLoading: loadingGroups } = useProductGroups();
   const { data: oppsData = [], isLoading: loadingOpps } = useSalesOpportunities();
 
@@ -144,7 +167,10 @@ const Index = () => {
       if (g.id && g.name) groupMap.set(g.id, g.name);
     }
 
-    const productMap = new Map<string, { current_price: number | null; group_name: string | null; sciezka_z: string | null }>();
+    const productMap = new Map<
+      string,
+      { current_price: number | null; group_name: string | null; sciezka_z: string | null }
+    >();
     for (const p of productsData) {
       if (p.name) {
         productMap.set(p.name.trim().toLowerCase(), {
@@ -196,9 +222,15 @@ const Index = () => {
     }
 
     const normRows = allRows.map((r, idx) => {
-      const client = String(r.client_name ?? "").trim().toLowerCase();
-      const product = String(r.product_name ?? "").trim().toLowerCase();
-      const desc = String(r.description ?? "").trim().toLowerCase();
+      const client = String(r.client_name ?? "")
+        .trim()
+        .toLowerCase();
+      const product = String(r.product_name ?? "")
+        .trim()
+        .toLowerCase();
+      const desc = String(r.description ?? "")
+        .trim()
+        .toLowerCase();
       return {
         idx,
         client,
@@ -264,17 +296,13 @@ const Index = () => {
     setTimeout(processChunk, 0);
   }, [pendingOpps]);
 
-
   // Cross-filtering - identical logic
   const filterOptions = useMemo(() => {
     const s = filters.search.toLowerCase();
 
     const matchesSearch = (r: ResultRow) => {
       if (!s) return true;
-      const haystack = [r.product_name, r.client_name, r.description]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+      const haystack = [r.product_name, r.client_name, r.description].filter(Boolean).join(" ").toLowerCase();
       return haystack.includes(s);
     };
 
@@ -315,14 +343,13 @@ const Index = () => {
   const filteredRows = useMemo(() => {
     const s = filters.search.toLowerCase();
     return allRows.filter((r) => {
+      // Jeśli cena (price) wynosi 0, jest pusta (null) lub niezdefiniowana (undefined) - nie pokazuj tego wiersza
+      if (!r.price || r.price === 0) return false;
       if (filters.clientName && r.client_name !== filters.clientName) return false;
       if (filters.productName && r.product_name !== filters.productName) return false;
       if (filters.groupName && r.group_name !== filters.groupName) return false;
       if (s) {
-        const haystack = [r.product_name, r.client_name, r.description]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
+        const haystack = [r.product_name, r.client_name, r.description].filter(Boolean).join(" ").toLowerCase();
         if (!haystack.includes(s)) return false;
       }
       return true;
@@ -399,12 +426,16 @@ const Index = () => {
     return sorted;
   }, [filteredRows, sortKey, sortDir]);
 
-  useEffect(() => { setPage(0); }, [filters, sortKey, sortDir, pageSize]);
+  useEffect(() => {
+    setPage(0);
+  }, [filters, sortKey, sortDir, pageSize]);
 
   const handlePageSizeChange = useCallback((val: string) => {
     const n = Number(val);
     setPageSize(n);
-    try { localStorage.setItem(STORAGE_KEY, String(n)); } catch { }
+    try {
+      localStorage.setItem(STORAGE_KEY, String(n));
+    } catch {}
   }, []);
 
   const totalPages = Math.ceil(sortedRows.length / pageSize);
@@ -413,20 +444,25 @@ const Index = () => {
     [sortedRows, page, pageSize],
   );
 
-  const handleSort = useCallback((key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
-  }, [sortKey]);
+  const handleSort = useCallback(
+    (key: SortKey) => {
+      if (sortKey === key) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      } else {
+        setSortKey(key);
+        setSortDir("asc");
+      }
+    },
+    [sortKey],
+  );
 
   const SortIcon = ({ column }: { column: SortKey }) => {
     if (sortKey !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
-    return sortDir === "asc"
-      ? <ArrowUp className="h-3 w-3 ml-1 text-primary" />
-      : <ArrowDown className="h-3 w-3 ml-1 text-primary" />;
+    return sortDir === "asc" ? (
+      <ArrowUp className="h-3 w-3 ml-1 text-primary" />
+    ) : (
+      <ArrowDown className="h-3 w-3 ml-1 text-primary" />
+    );
   };
 
   const handleCopyPath = async (path: string) => {
@@ -444,9 +480,7 @@ const Index = () => {
 
     if (diff > 0) {
       return (
-        <Badge className="bg-success/15 text-success border-success/30 hover:bg-success/20">
-          +{diff.toFixed(1)}%
-        </Badge>
+        <Badge className="bg-success/15 text-success border-success/30 hover:bg-success/20">+{diff.toFixed(1)}%</Badge>
       );
     }
     if (diff < 0) {
@@ -456,7 +490,11 @@ const Index = () => {
         </Badge>
       );
     }
-    return <Badge variant="secondary" className="text-muted-foreground">0%</Badge>;
+    return (
+      <Badge variant="secondary" className="text-muted-foreground">
+        0%
+      </Badge>
+    );
   };
 
   const hasProdioLink = (row: ResultRow) => !!row.product_id;
@@ -482,7 +520,13 @@ const Index = () => {
   }, [queryClient]);
 
   // Dynamic col count for skeleton/empty rows
-  const visibleColCount = 5 + (show("group_name") ? 1 : 0) + (show("client_name") ? 1 : 0) + (show("order_date") ? 1 : 0) + (show("quantity") ? 1 : 0) + (show("price") ? 1 : 0);
+  const visibleColCount =
+    5 +
+    (show("group_name") ? 1 : 0) +
+    (show("client_name") ? 1 : 0) +
+    (show("order_date") ? 1 : 0) +
+    (show("quantity") ? 1 : 0) +
+    (show("price") ? 1 : 0);
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-6">
@@ -526,47 +570,90 @@ const Index = () => {
             <TableHeader>
               <TableRow className="bg-muted/50">
                 <TableHead className="font-semibold w-10">#</TableHead>
-                <TableHead className="font-semibold min-w-[200px] cursor-pointer select-none" onClick={() => handleSort("product_name")}>
-                  <span className="inline-flex items-center">Produkt <SortIcon column="product_name" /></span>
+                <TableHead
+                  className="font-semibold min-w-[200px] cursor-pointer select-none"
+                  onClick={() => handleSort("product_name")}
+                >
+                  <span className="inline-flex items-center">
+                    Produkt <SortIcon column="product_name" />
+                  </span>
                 </TableHead>
                 {show("group_name") && (
-                  <TableHead className="font-semibold min-w-[140px] cursor-pointer select-none" onClick={() => handleSort("group_name")}>
-                    <span className="inline-flex items-center">Grupa Produktowa <SortIcon column="group_name" /></span>
+                  <TableHead
+                    className="font-semibold min-w-[140px] cursor-pointer select-none"
+                    onClick={() => handleSort("group_name")}
+                  >
+                    <span className="inline-flex items-center">
+                      Grupa Produktowa <SortIcon column="group_name" />
+                    </span>
                   </TableHead>
                 )}
                 {show("client_name") && (
-                  <TableHead className="font-semibold min-w-[140px] cursor-pointer select-none" onClick={() => handleSort("client_name")}>
-                    <span className="inline-flex items-center">Klient <SortIcon column="client_name" /></span>
+                  <TableHead
+                    className="font-semibold min-w-[140px] cursor-pointer select-none"
+                    onClick={() => handleSort("client_name")}
+                  >
+                    <span className="inline-flex items-center">
+                      Klient <SortIcon column="client_name" />
+                    </span>
                   </TableHead>
                 )}
                 {show("order_date") && (
-                  <TableHead className="font-semibold cursor-pointer select-none" onClick={() => handleSort("order_date")}>
-                    <span className="inline-flex items-center">Data <SortIcon column="order_date" /></span>
+                  <TableHead
+                    className="font-semibold cursor-pointer select-none"
+                    onClick={() => handleSort("order_date")}
+                  >
+                    <span className="inline-flex items-center">
+                      Data <SortIcon column="order_date" />
+                    </span>
                   </TableHead>
                 )}
                 {show("quantity") && (
-                  <TableHead className="font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("quantity")}>
-                    <span className="inline-flex items-center justify-end">Ilość <SortIcon column="quantity" /></span>
+                  <TableHead
+                    className="font-semibold text-right cursor-pointer select-none"
+                    onClick={() => handleSort("quantity")}
+                  >
+                    <span className="inline-flex items-center justify-end">
+                      Ilość <SortIcon column="quantity" />
+                    </span>
                   </TableHead>
                 )}
                 {show("price") && (
-                  <TableHead className="font-semibold text-right cursor-pointer select-none min-w-[130px]" onClick={() => handleSort("price")}>
-                    <span className="inline-flex items-center justify-end whitespace-normal">Wycena (Zlec.&nbsp;/&nbsp;Kat.) <SortIcon column="price" /></span>
+                  <TableHead
+                    className="font-semibold text-right cursor-pointer select-none min-w-[130px]"
+                    onClick={() => handleSort("price")}
+                  >
+                    <span className="inline-flex items-center justify-end whitespace-normal">
+                      Wycena (Zlec.&nbsp;/&nbsp;Kat.) <SortIcon column="price" />
+                    </span>
                   </TableHead>
                 )}
-                <TableHead className="font-semibold cursor-pointer select-none min-w-[80px] max-w-[100px]" onClick={() => handleSort("szansa")}>
+                <TableHead
+                  className="font-semibold cursor-pointer select-none min-w-[80px] max-w-[100px]"
+                  onClick={() => handleSort("szansa")}
+                >
                   <span className="inline-flex items-center leading-tight">
-                    <span className="break-words">Szansa<br />Sprzedaży</span>
+                    <span className="break-words">
+                      Szansa
+                      <br />
+                      Sprzedaży
+                    </span>
                     <SortIcon column="szansa" />
                   </span>
                 </TableHead>
-                <TableHead className="font-semibold w-[50px] max-w-[50px] text-center cursor-pointer select-none p-1" onClick={() => handleSort("prodio")}>
+                <TableHead
+                  className="font-semibold w-[50px] max-w-[50px] text-center cursor-pointer select-none p-1"
+                  onClick={() => handleSort("prodio")}
+                >
                   <span className="inline-flex items-center justify-center text-xs">
                     <Eye className="h-3.5 w-3.5" />
                     <SortIcon column="prodio" />
                   </span>
                 </TableHead>
-                <TableHead className="font-semibold w-[50px] max-w-[50px] text-center cursor-pointer select-none p-1" onClick={() => handleSort("plik")}>
+                <TableHead
+                  className="font-semibold w-[50px] max-w-[50px] text-center cursor-pointer select-none p-1"
+                  onClick={() => handleSort("plik")}
+                >
                   <span className="inline-flex items-center justify-center text-xs">
                     <Paperclip className="h-3.5 w-3.5" />
                     <SortIcon column="plik" />
@@ -579,7 +666,9 @@ const Index = () => {
                 Array.from({ length: 8 }).map((_, i) => (
                   <TableRow key={i}>
                     {Array.from({ length: visibleColCount }).map((_, j) => (
-                      <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
+                      <TableCell key={j}>
+                        <Skeleton className="h-4 w-full" />
+                      </TableCell>
                     ))}
                   </TableRow>
                 ))
@@ -592,9 +681,7 @@ const Index = () => {
               ) : (
                 pageRows.map((row, i) => (
                   <TableRow key={row.id || i} className="hover:bg-muted/50 transition-colors group/row">
-                    <TableCell className="text-muted-foreground text-xs">
-                      {page * pageSize + i + 1}
-                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">{page * pageSize + i + 1}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5">
                         <button
@@ -615,34 +702,24 @@ const Index = () => {
                             <TooltipTrigger>
                               <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
                             </TooltipTrigger>
-                            <TooltipContent side="right" className="z-50">Brak dopasowania w katalogu produktów</TooltipContent>
+                            <TooltipContent side="right" className="z-50">
+                              Brak dopasowania w katalogu produktów
+                            </TooltipContent>
                           </Tooltip>
                         )}
                       </div>
                       {row.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                          {row.description}
-                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{row.description}</p>
                       )}
                     </TableCell>
                     {show("group_name") && (
-                      <TableCell className="text-sm text-muted-foreground">
-                        {row.group_name || "—"}
-                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{row.group_name || "—"}</TableCell>
                     )}
                     {show("client_name") && (
-                      <TableCell className="text-sm text-foreground">
-                        {row.client_name || "—"}
-                      </TableCell>
+                      <TableCell className="text-sm text-foreground">{row.client_name || "—"}</TableCell>
                     )}
-                    {show("order_date") && (
-                      <TableCell>
-                        {row.order_date ? formatDate(row.order_date) : "—"}
-                      </TableCell>
-                    )}
-                    {show("quantity") && (
-                      <TableCell className="text-right">{row.quantity ?? "—"}</TableCell>
-                    )}
+                    {show("order_date") && <TableCell>{row.order_date ? formatDate(row.order_date) : "—"}</TableCell>}
+                    {show("quantity") && <TableCell className="text-right">{row.quantity ?? "—"}</TableCell>}
                     {show("price") && (
                       <TableCell className="text-right">
                         <div className="flex flex-col items-end gap-0.5">
@@ -722,12 +799,7 @@ const Index = () => {
               {page * pageSize + 1}–{Math.min((page + 1) * pageSize, sortedRows.length)} z {sortedRows.length}
             </p>
             <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page === 0}
-                onClick={() => setPage((p) => p - 1)}
-              >
+              <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
                 <ChevronLeft className="h-4 w-4 mr-1" /> Poprzednia
               </Button>
               <Button
