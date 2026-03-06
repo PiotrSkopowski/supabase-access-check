@@ -352,6 +352,7 @@ const Index = () => {
 
   if (forbiddenNames.some(name => client.includes(name) || product.includes(name))) {
     return false;
+  }
       if (filters.clientName && r.client_name !== filters.clientName) return false;
       if (filters.productName && r.product_name !== filters.productName) return false;
       if (filters.groupName && r.group_name !== filters.groupName) return false;
