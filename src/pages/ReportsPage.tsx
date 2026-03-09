@@ -1,16 +1,29 @@
+import { useState } from "react";
+import { subMonths } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Package, BarChart3 } from "lucide-react";
+import { Users, Package, BarChart3, Briefcase } from "lucide-react";
 import RFMAnalysis from "@/components/reports/RFMAnalysis";
 import AssortmentAnalysis from "@/components/reports/AssortmentAnalysis";
-import ClientAnalyticsDashboard from "@/components/reports/ClientAnalyticsDashboard";
+import PortfolioView from "@/components/reports/PortfolioView";
+import ClientDrilldown from "@/components/reports/ClientDrilldown";
+import ClientComparison from "@/components/reports/ClientComparison";
 import { useOrderHistory, useSalesOpportunities } from "@/hooks/useOrdersData";
+import type { DateRange } from "react-day-picker";
+
+type View = { type: "portfolio" } | { type: "drilldown"; client: string } | { type: "compare"; clients: string[] };
 
 const ReportsPage = () => {
   const { data: orders = [], isLoading: loadingOrders } = useOrderHistory();
   const { data: opportunities = [], isLoading: loadingOpps } = useSalesOpportunities();
 
   const loading = loadingOrders || loadingOpps;
+
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subMonths(new Date(), 6),
+    to: new Date(),
+  });
+  const [view, setView] = useState<View>({ type: "portfolio" });
 
   if (loading) {
     return (
@@ -28,15 +41,15 @@ const ReportsPage = () => {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-foreground">Raporty Analityczne</h1>
 
-      <Tabs defaultValue="analytics" className="w-full">
+      <Tabs defaultValue="portfolio" className="w-full">
         <TabsList>
-          <TabsTrigger value="analytics" className="gap-1.5">
-            <BarChart3 className="h-4 w-4" />
-            Panel Klienta
+          <TabsTrigger value="portfolio" className="gap-1.5" onClick={() => setView({ type: "portfolio" })}>
+            <Briefcase className="h-4 w-4" />
+            Portfel Klientów
           </TabsTrigger>
           <TabsTrigger value="rfm" className="gap-1.5">
             <Users className="h-4 w-4" />
-            Ranking Klientów (RFM)
+            Ranking RFM
           </TabsTrigger>
           <TabsTrigger value="assortment" className="gap-1.5">
             <Package className="h-4 w-4" />
@@ -44,8 +57,32 @@ const ReportsPage = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="analytics">
-          <ClientAnalyticsDashboard orders={orders} />
+        <TabsContent value="portfolio">
+          {view.type === "portfolio" && (
+            <PortfolioView
+              orders={orders}
+              dateRange={dateRange}
+              onDateRangeChange={setDateRange}
+              onClientClick={(client) => setView({ type: "drilldown", client })}
+              onCompare={(clients) => setView({ type: "compare", clients })}
+            />
+          )}
+          {view.type === "drilldown" && (
+            <ClientDrilldown
+              clientName={view.client}
+              orders={orders}
+              dateRange={dateRange}
+              onBack={() => setView({ type: "portfolio" })}
+            />
+          )}
+          {view.type === "compare" && (
+            <ClientComparison
+              clientNames={view.clients}
+              orders={orders}
+              dateRange={dateRange}
+              onBack={() => setView({ type: "portfolio" })}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="rfm">
