@@ -53,21 +53,72 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const mappedOrders = prodioOrders.map((o: any) => ({
-      prodio_order_id: String(o.id),
-      client_id: o.client_id ?? null,
-      client_name: o.client_name ?? null,
-      product_id: o.product_id ?? null,
-      product_name: o.product_name ?? null,
-      product_group: o.product_group ?? null,
-      product_group_name: o.product_group_name ?? null,
-      price: o.price != null ? Number(o.price) : null,
-      currency: o.currency ?? null,
-      order_date: o.create_date ?? null,
-      quantity: o.total != null ? Number(o.total) : null,
-      description: o.weight ?? null,
-      source: "PRODIO",
-    }));
+    // Lookup: pobierz dane katalogowe produktów jednym zapytaniem (unikamy N+1)
+    const productIds = [...new Set(
+      prodioOrders
+        .map((o: any) => o.product_id)
+        .filter((id: any) => id != null)
+    )];
+
+    const productLookup = new Map<number, { product_group: number | null; product_group_name: string | null; current_price: number | null }>();
+
+    if (productIds.length > 0) {
+      console.log(`[PRODIO] Lookup: pobieram dane katalogowe dla ${productIds.length} produktów...`);
+      const { data: catalogProducts, error: lookupError } = await supabase
+        .from("products")
+        .select("prodio_id, group_id, current_price")
+        .in("prodio_id", productIds);
+
+      if (lookupError) {
+        console.warn(`[PRODIO] Lookup warning: ${lookupError.message}`);
+      } else if (catalogProducts) {
+        // Pobierz nazwy grup produktowych
+        const groupIds = [...new Set(catalogProducts.map((p: any) => p.group_id).filter(Boolean))];
+        const groupLookup = new Map<number, string>();
+
+        if (groupIds.length > 0) {
+          const { data: groups } = await supabase
+            .from("product_groups")
+            .select("id, name")
+            .in("id", groupIds);
+          if (groups) {
+            for (const g of groups) {
+              groupLookup.set(g.id, g.name);
+            }
+          }
+        }
+
+        for (const p of catalogProducts) {
+          productLookup.set(p.prodio_id, {
+            product_group: p.group_id ?? null,
+            product_group_name: p.group_id ? (groupLookup.get(p.group_id) ?? null) : null,
+            current_price: p.current_price ?? null,
+          });
+        }
+        console.log(`[PRODIO] Lookup: znaleziono ${productLookup.size} produktów w katalogu.`);
+      }
+    }
+
+    const mappedOrders = prodioOrders.map((o: any) => {
+      const catalog = o.product_id ? productLookup.get(o.product_id) : undefined;
+      const prodioPrice = o.price != null ? Number(o.price) : null;
+
+      return {
+        prodio_order_id: String(o.id),
+        client_id: o.client_id ?? null,
+        client_name: o.client_name ?? null,
+        product_id: o.product_id ?? null,
+        product_name: o.product_name ?? null,
+        product_group: catalog?.product_group ?? o.product_group ?? null,
+        product_group_name: catalog?.product_group_name ?? o.product_group_name ?? null,
+        price: (prodioPrice != null && prodioPrice > 0) ? prodioPrice : (catalog?.current_price ?? prodioPrice),
+        currency: o.currency ?? null,
+        order_date: o.create_date ?? null,
+        quantity: o.total != null ? Number(o.total) : null,
+        description: o.weight ?? null,
+        source: "PRODIO",
+      };
+    });
 
     console.log(`[PRODIO] Zapisuję ${mappedOrders.length} rekordów do bazy...`);
     const { data, error } = await supabase
