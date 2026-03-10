@@ -29,6 +29,133 @@ async function fetchRecentOrders(apiToken: string, limit: number = 10): Promise<
   return orders;
 }
 
+/**
+ * Resolves a Prodio group name to a local product_groups.id.
+ * Creates the group if it doesn't exist yet.
+ */
+async function resolveGroupId(
+  supabase: any,
+  prodioGroupName: string | null,
+  groupCache: Map<string, number>
+): Promise<number | null> {
+  if (!prodioGroupName) return null;
+
+  // Check cache first
+  if (groupCache.has(prodioGroupName)) {
+    return groupCache.get(prodioGroupName)!;
+  }
+
+  // Try to find existing group by name
+  const { data: existing, error: findErr } = await supabase
+    .from("product_groups")
+    .select("id")
+    .eq("name", prodioGroupName)
+    .maybeSingle();
+
+  if (findErr) {
+    console.warn(`[PRODIO] resolveGroupId find error for "${prodioGroupName}": ${findErr.message}`);
+    return null;
+  }
+
+  if (existing) {
+    groupCache.set(prodioGroupName, existing.id);
+    console.log(`[PRODIO] Grupa "${prodioGroupName}" już istnieje, lokalne id=${existing.id}`);
+    return existing.id;
+  }
+
+  // Create new group
+  const { data: newGroup, error: insertErr } = await supabase
+    .from("product_groups")
+    .insert({ name: prodioGroupName })
+    .select("id")
+    .single();
+
+  if (insertErr) {
+    console.error(`[PRODIO] Błąd tworzenia grupy "${prodioGroupName}": ${insertErr.message}`);
+    return null;
+  }
+
+  console.log(`[PRODIO] Utworzono nową grupę "${prodioGroupName}", lokalne id=${newGroup.id}`);
+  groupCache.set(prodioGroupName, newGroup.id);
+  return newGroup.id;
+}
+
+/**
+ * Ensures a product exists in the local `products` table with correct group_id and price.
+ * Anti-Poisoned Cache: updates existing products if they have missing price or group.
+ */
+async function ensureProduct(
+  supabase: any,
+  prodioProductId: number,
+  productName: string | null,
+  localGroupId: number | null,
+  prodioPrice: number | null
+): Promise<{ group_id: number | null; current_price: number | null }> {
+  // Check if product already exists
+  const { data: existing, error: findErr } = await supabase
+    .from("products")
+    .select("id, prodio_id, group_id, current_price, name")
+    .eq("prodio_id", prodioProductId)
+    .maybeSingle();
+
+  if (findErr) {
+    console.warn(`[PRODIO] ensureProduct find error for prodio_id=${prodioProductId}: ${findErr.message}`);
+    return { group_id: localGroupId, current_price: prodioPrice };
+  }
+
+  if (existing) {
+    // Anti-Poisoned Cache: update if missing group or price
+    const needsUpdate: Record<string, any> = {};
+    if (!existing.group_id && localGroupId) {
+      needsUpdate.group_id = localGroupId;
+    }
+    if (!existing.current_price && prodioPrice && prodioPrice > 0) {
+      needsUpdate.current_price = prodioPrice;
+    }
+    if (!existing.name && productName) {
+      needsUpdate.name = productName;
+    }
+
+    if (Object.keys(needsUpdate).length > 0) {
+      console.log(`[PRODIO] Anti-Poisoned Cache: aktualizuję produkt prodio_id=${prodioProductId}, pola: ${Object.keys(needsUpdate).join(', ')}`);
+      const { error: updateErr } = await supabase
+        .from("products")
+        .update(needsUpdate)
+        .eq("id", existing.id);
+      if (updateErr) {
+        console.warn(`[PRODIO] Błąd aktualizacji produktu prodio_id=${prodioProductId}: ${updateErr.message}`);
+      }
+    }
+
+    return {
+      group_id: needsUpdate.group_id ?? existing.group_id,
+      current_price: needsUpdate.current_price ?? existing.current_price,
+    };
+  }
+
+  // Product doesn't exist – insert it
+  const newProduct: Record<string, any> = {
+    prodio_id: prodioProductId,
+    name: productName,
+  };
+  if (localGroupId) newProduct.group_id = localGroupId;
+  if (prodioPrice && prodioPrice > 0) newProduct.current_price = prodioPrice;
+
+  const { data: inserted, error: insertErr } = await supabase
+    .from("products")
+    .insert(newProduct)
+    .select("id, group_id, current_price")
+    .single();
+
+  if (insertErr) {
+    console.error(`[PRODIO] Błąd wstawiania produktu prodio_id=${prodioProductId}: ${insertErr.message}`);
+    return { group_id: localGroupId, current_price: prodioPrice };
+  }
+
+  console.log(`[PRODIO] Dodano nowy produkt prodio_id=${prodioProductId}, lokalny id=${inserted.id}`);
+  return { group_id: inserted.group_id, current_price: inserted.current_price };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -53,72 +180,70 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Lookup: pobierz dane katalogowe produktów jednym zapytaniem (unikamy N+1)
-    const productIds = [...new Set(
-      prodioOrders
-        .map((o: any) => o.product_id)
-        .filter((id: any) => id != null)
-    )];
+    // Cache for group name -> local id resolution
+    const groupCache = new Map<string, number>();
 
-    const productLookup = new Map<number, { product_group: number | null; product_group_name: string | null; current_price: number | null }>();
-
-    if (productIds.length > 0) {
-      console.log(`[PRODIO] Lookup: pobieram dane katalogowe dla ${productIds.length} produktów...`);
-      const { data: catalogProducts, error: lookupError } = await supabase
-        .from("products")
-        .select("prodio_id, group_id, current_price")
-        .in("prodio_id", productIds);
-
-      if (lookupError) {
-        console.warn(`[PRODIO] Lookup warning: ${lookupError.message}`);
-      } else if (catalogProducts) {
-        // Pobierz nazwy grup produktowych
-        const groupIds = [...new Set(catalogProducts.map((p: any) => p.group_id).filter(Boolean))];
-        const groupLookup = new Map<number, string>();
-
-        if (groupIds.length > 0) {
-          const { data: groups } = await supabase
-            .from("product_groups")
-            .select("id, name")
-            .in("id", groupIds);
-          if (groups) {
-            for (const g of groups) {
-              groupLookup.set(g.id, g.name);
-            }
-          }
-        }
-
-        for (const p of catalogProducts) {
-          productLookup.set(p.prodio_id, {
-            product_group: p.group_id ?? null,
-            product_group_name: p.group_id ? (groupLookup.get(p.group_id) ?? null) : null,
-            current_price: p.current_price ?? null,
-          });
-        }
-        console.log(`[PRODIO] Lookup: znaleziono ${productLookup.size} produktów w katalogu.`);
+    // Pre-load existing groups into cache
+    const { data: existingGroups } = await supabase
+      .from("product_groups")
+      .select("id, name");
+    if (existingGroups) {
+      for (const g of existingGroups) {
+        if (g.name) groupCache.set(g.name, g.id);
       }
+      console.log(`[PRODIO] Pre-loaded ${groupCache.size} grup do cache.`);
     }
 
-    const mappedOrders = prodioOrders.map((o: any) => {
-      const catalog = o.product_id ? productLookup.get(o.product_id) : undefined;
+    // Process each order: resolve group -> ensure product -> build mapped order
+    const mappedOrders = [];
+    for (const o of prodioOrders) {
       const prodioPrice = o.price != null ? Number(o.price) : null;
+      const prodioGroupName: string | null = o.product_group_name ?? o.group_name ?? null;
 
-      return {
+      let localGroupId: number | null = null;
+      let currentPrice: number | null = null;
+      let groupName: string | null = prodioGroupName;
+
+      if (o.product_id) {
+        // 1. Resolve group by NAME (not by Prodio ID)
+        localGroupId = await resolveGroupId(supabase, prodioGroupName, groupCache);
+
+        // 2. Ensure product exists with correct local group_id
+        const productInfo = await ensureProduct(
+          supabase,
+          o.product_id,
+          o.product_name ?? null,
+          localGroupId,
+          prodioPrice
+        );
+
+        localGroupId = productInfo.group_id;
+        currentPrice = productInfo.current_price;
+
+        // Resolve group name from cache if we have localGroupId
+        if (localGroupId && !groupName) {
+          for (const [name, id] of groupCache.entries()) {
+            if (id === localGroupId) { groupName = name; break; }
+          }
+        }
+      }
+
+      mappedOrders.push({
         prodio_order_id: String(o.id),
         client_id: o.client_id ?? null,
         client_name: o.client_name ?? null,
         product_id: o.product_id ?? null,
         product_name: o.product_name ?? null,
-        product_group: catalog?.product_group ?? o.product_group ?? null,
-        product_group_name: catalog?.product_group_name ?? o.product_group_name ?? null,
-        price: (prodioPrice != null && prodioPrice > 0) ? prodioPrice : (catalog?.current_price ?? prodioPrice),
+        product_group: localGroupId ?? null,
+        product_group_name: groupName ?? null,
+        price: (prodioPrice != null && prodioPrice > 0) ? prodioPrice : (currentPrice ?? prodioPrice),
         currency: o.currency ?? null,
         order_date: o.create_date ?? null,
         quantity: o.total != null ? Number(o.total) : null,
         description: o.weight ?? null,
         source: "PRODIO",
-      };
-    });
+      });
+    }
 
     console.log(`[PRODIO] Zapisuję ${mappedOrders.length} rekordów do bazy...`);
     const { data, error } = await supabase
@@ -127,7 +252,7 @@ Deno.serve(async (req) => {
       .select("id");
 
     if (error) {
-      console.error(`[PRODIO] Błąd zapisu: ${error.message}`);
+      console.error(`[PRODIO] Błąd zapisu order_history: ${error.message}`);
       return new Response(
         JSON.stringify({ error: `Błąd zapisu do bazy: ${error.message}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -142,10 +267,12 @@ Deno.serve(async (req) => {
         success: true,
         fetched: prodioOrders.length,
         upserted: totalUpserted,
+        groups_in_cache: groupCache.size,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
+    console.error(`[PRODIO] Nieoczekiwany błąd: ${(err as Error).message}`);
     return new Response(
       JSON.stringify({ error: `Nieoczekiwany błąd: ${(err as Error).message}` }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
