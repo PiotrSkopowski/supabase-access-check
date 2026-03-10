@@ -181,13 +181,15 @@ const Index = () => {
       }
     }
 
+    console.log("Pobrane dane order_history:", ordersData.slice(0, 5));
+
     const joined: ResultRow[] = ordersData.map((o: any) => {
       const key = o.product_name?.trim().toLowerCase() || "";
       const catalog = productMap.get(key);
       return {
         ...o,
         catalog_price: catalog?.current_price ?? null,
-        group_name: catalog?.group_name ?? null,
+        group_name: o.product_group_name || catalog?.group_name || null,
         product_matched: !!catalog,
         sciezka_z: catalog?.sciezka_z ?? null,
         computed_opportunity_price: null,
