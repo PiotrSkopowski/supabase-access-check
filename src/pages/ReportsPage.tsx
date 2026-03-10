@@ -47,7 +47,13 @@ const ReportsPage = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">Raporty Analityczne</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-foreground">Raporty Analityczne</h1>
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={fetchingOrders}>
+          <RefreshCw className={`h-4 w-4 mr-1.5 ${fetchingOrders ? "animate-spin" : ""}`} />
+          Odśwież dane
+        </Button>
+      </div>
 
       <Tabs defaultValue="portfolio" className="w-full">
         <TabsList>
