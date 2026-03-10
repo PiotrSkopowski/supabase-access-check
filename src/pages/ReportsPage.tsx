@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { subMonths } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Package, BarChart3, Briefcase } from "lucide-react";
+import { Users, Package, Briefcase, RefreshCw } from "lucide-react";
 import RFMAnalysis from "@/components/reports/RFMAnalysis";
 import AssortmentAnalysis from "@/components/reports/AssortmentAnalysis";
 import PortfolioView from "@/components/reports/PortfolioView";
@@ -14,10 +16,16 @@ import type { DateRange } from "react-day-picker";
 type View = { type: "portfolio" } | { type: "drilldown"; client: string } | { type: "compare"; clients: string[] };
 
 const ReportsPage = () => {
-  const { data: orders = [], isLoading: loadingOrders } = useOrderHistory();
+  const queryClient = useQueryClient();
+  const { data: orders = [], isLoading: loadingOrders, isFetching: fetchingOrders } = useOrderHistory();
   const { data: opportunities = [], isLoading: loadingOpps } = useSalesOpportunities();
 
   const loading = loadingOrders || loadingOpps;
+
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["order_history"] });
+    queryClient.invalidateQueries({ queryKey: ["sales_opportunities"] });
+  };
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: subMonths(new Date(), 6),
