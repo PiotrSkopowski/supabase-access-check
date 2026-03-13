@@ -21,7 +21,8 @@ import {
   ArrowUpDown,
   RefreshCw,
 } from "lucide-react";
-import { OrderFilters, EMPTY_FILTERS, type FilterState, type ToggleableColumn } from "@/components/OrderFilters";
+import { OrderFilters, createEmptyFilters, type FilterState, type ToggleableColumn } from "@/components/OrderFilters";
+import { getStatusDisplay } from "@/components/StatusFilter";
 import { SalesOpportunityCell, type SalesOpportunity } from "@/components/SalesOpportunityCell";
 import { ProductDrawer, type ProductDrawerData } from "@/components/ProductDrawer";
 import { toast } from "sonner";
