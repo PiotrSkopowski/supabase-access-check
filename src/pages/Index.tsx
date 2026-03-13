@@ -751,6 +751,36 @@ const Index = () => {
                     {show("client_name") && (
                       <TableCell className="text-sm text-foreground">{row.client_name || "—"}</TableCell>
                     )}
+                    {/* WAGON ZE STATUSEM */}
+                    <TableCell>
+                      {(() => {
+                        const status = row.status?.toLowerCase();
+                        switch (status) {
+                          case "invoiced":
+                            return (
+                              <Badge className="bg-green-100 text-green-800 border-green-200">Zafakturowane</Badge>
+                            );
+                          case "closed":
+                            return (
+                              <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+                                Zamknięte
+                              </Badge>
+                            );
+                          case "canceled":
+                            return (
+                              <Badge variant="outline" className="text-red-500 border-red-200 bg-red-50">
+                                Anulowane
+                              </Badge>
+                            );
+                          default:
+                            return (
+                              <Badge variant="outline" className="text-muted-foreground italic">
+                                {row.status || "Brak"}
+                              </Badge>
+                            );
+                        }
+                      })()}
+                    </TableCell>
                     {show("order_date") && <TableCell>{row.order_date ? formatDate(row.order_date) : "—"}</TableCell>}
                     {show("quantity") && <TableCell className="text-right">{row.quantity ?? "—"}</TableCell>}
                     {show("price") && (
