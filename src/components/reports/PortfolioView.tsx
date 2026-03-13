@@ -8,6 +8,7 @@ import {
   ChevronsLeft, ChevronsRight, BarChart3, GitCompare, Info,
   CalendarIcon, Search, Settings, Check,
 } from "lucide-react";
+import { StatusFilter } from "@/components/StatusFilter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
