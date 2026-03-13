@@ -602,6 +602,7 @@ const Index = () => {
         clients={filterOptions.clients}
         products={filterOptions.products}
         groups={filterOptions.groups}
+        availableStatuses={availableStatuses}
         pageSize={pageSize}
         onPageSizeChange={(n) => handlePageSizeChange(String(n))}
         pageSizeOptions={PAGE_SIZE_OPTIONS}
