@@ -353,17 +353,20 @@ const Index = () => {
       // Date range filter
       if (dateRange?.from && r.order_date) {
         const d = new Date(r.order_date);
-        const interval = { start: startOfDay(dateRange.from), end: dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from) };
+        const interval = {
+          start: startOfDay(dateRange.from),
+          end: dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from),
+        };
         if (!isWithinInterval(d, interval)) return false;
       }
       // Blokada klientów testowych i produktów próbnych
-  const forbiddenNames = ['fly4u', 'sky rocket', 'test','toptech'];
-  const client = (r.client_name || "").toLowerCase();
-  const product = (r.product_name || "").toLowerCase();
+      const forbiddenNames = ["fly4u", "sky rocket", "test", "toptech"];
+      const client = (r.client_name || "").toLowerCase();
+      const product = (r.product_name || "").toLowerCase();
 
-  if (forbiddenNames.some(name => client.includes(name) || product.includes(name))) {
-    return false;
-  }
+      if (forbiddenNames.some((name) => client.includes(name) || product.includes(name))) {
+        return false;
+      }
       if (filters.clientName && r.client_name !== filters.clientName) return false;
       if (filters.productName && r.product_name !== filters.productName) return false;
       if (filters.groupName && r.group_name !== filters.groupName) return false;
@@ -619,6 +622,15 @@ const Index = () => {
                     </span>
                   </TableHead>
                 )}
+                {/* Nowa kolumna Status */}
+                <TableHead
+                  className="font-semibold min-w-[120px] cursor-pointer select-none"
+                  onClick={() => handleSort("status")}
+                >
+                  <span className="inline-flex items-center">
+                    Status <SortIcon column="status" />
+                  </span>
+                </TableHead>
                 {show("order_date") && (
                   <TableHead
                     className="font-semibold cursor-pointer select-none"
