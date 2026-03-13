@@ -568,6 +568,7 @@ const Index = () => {
     5 +
     (show("group_name") ? 1 : 0) +
     (show("client_name") ? 1 : 0) +
+    (show("status") ? 1 : 0) +
     (show("order_date") ? 1 : 0) +
     (show("quantity") ? 1 : 0) +
     (show("price") ? 1 : 0);
