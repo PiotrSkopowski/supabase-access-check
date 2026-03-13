@@ -84,18 +84,41 @@ const ProductsPage = () => {
       }
     }
 
-    // Count sales opportunities per product
-    const norm = (s: string) => (s ?? "").trim().toLowerCase();
+    // Pre-index product names for O(n+m) opportunity matching
+    const nameIndex = new Map<string, AggregatedProduct[]>();
+    for (const [, entry] of map) {
+      const eName = (entry.product_name ?? "").trim().toLowerCase();
+      if (eName.length >= 2) {
+        if (!nameIndex.has(eName)) nameIndex.set(eName, []);
+        nameIndex.get(eName)!.push(entry);
+      }
+    }
+
+    // Count sales opportunities - direct match first, substring fallback
     for (const s of opportunities) {
-      const sName = norm(s.product_name);
+      const sName = (s.product_name ?? "").trim().toLowerCase();
       if (sName.length < 2) continue;
 
-      for (const [, entry] of map) {
-        const eName = norm(entry.product_name);
-        if (eName.includes(sName) || sName.includes(eName)) {
+      // Try exact match first (O(1))
+      const exact = nameIndex.get(sName);
+      if (exact) {
+        for (const entry of exact) {
           entry.sales_count++;
           if (s.opportunity_date && (!entry.last_activity || s.opportunity_date > entry.last_activity)) {
             entry.last_activity = s.opportunity_date;
+          }
+        }
+        continue;
+      }
+
+      // Substring fallback only when no exact match
+      for (const [eName, entries] of nameIndex) {
+        if (eName.includes(sName) || sName.includes(eName)) {
+          for (const entry of entries) {
+            entry.sales_count++;
+            if (s.opportunity_date && (!entry.last_activity || s.opportunity_date > entry.last_activity)) {
+              entry.last_activity = s.opportunity_date;
+            }
           }
         }
       }
@@ -117,8 +140,8 @@ const ProductsPage = () => {
       }
 
       if (entry.prices.length >= 2) {
-        const last = entry.prices[0]; // newest
-        const prev = entry.prices[1]; // penultimate
+        const last = entry.prices[0];
+        const prev = entry.prices[1];
         if (last > prev) entry.trend = "up";
         else if (last < prev) entry.trend = "down";
         else entry.trend = "flat";
