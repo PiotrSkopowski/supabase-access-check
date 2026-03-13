@@ -52,8 +52,14 @@ export const EMPTY_FILTERS: FilterState = {
   groupName: "",
 };
 
-export function OrderFilters({ filters, onChange, clients, products, groups, pageSize, onPageSizeChange, pageSizeOptions, hiddenColumns, onToggleColumn }: OrderFiltersProps) {
-  const hasAny = filters.search || filters.clientName || filters.productName || filters.groupName;
+export function OrderFilters({ filters, onChange, clients, products, groups, pageSize, onPageSizeChange, pageSizeOptions, hiddenColumns, onToggleColumn, dateRange, onDateRangeChange }: OrderFiltersProps) {
+  const hasAny = filters.search || filters.clientName || filters.productName || filters.groupName || dateRange?.from;
+
+  const dateRangeLabel = dateRange?.from && dateRange?.to
+    ? `${format(dateRange.from, "dd MMM yyyy", { locale: pl })} – ${format(dateRange.to, "dd MMM yyyy", { locale: pl })}`
+    : dateRange?.from
+      ? `Od ${format(dateRange.from, "dd MMM yyyy", { locale: pl })}`
+      : "Cały okres";
 
   return (
     <div className="space-y-3">
