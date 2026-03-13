@@ -56,12 +56,21 @@ interface SegmentThresholds {
   bMinOrders: number;
 }
 
-const DEFAULT_THRESHOLDS: SegmentThresholds = {
-  aMinRevenue: 10000,
-  aMinOrders: 5,
-  bMinRevenue: 2000,
-  bMinOrders: 2,
+const LS_KEYS = {
+  aRevenue: "toptech-segment-a-revenue",
+  aOrders: "toptech-segment-a-orders",
+  bRevenue: "toptech-segment-b-revenue",
+  bOrders: "toptech-segment-b-orders",
 };
+
+const loadThresholds = (): SegmentThresholds => ({
+  aMinRevenue: Number(localStorage.getItem(LS_KEYS.aRevenue)) || 10000,
+  aMinOrders: Number(localStorage.getItem(LS_KEYS.aOrders)) || 5,
+  bMinRevenue: Number(localStorage.getItem(LS_KEYS.bRevenue)) || 2000,
+  bMinOrders: Number(localStorage.getItem(LS_KEYS.bOrders)) || 2,
+});
+
+const DEFAULT_THRESHOLDS: SegmentThresholds = loadThresholds();
 
 const formatCurrency = (v: number) =>
   v.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
