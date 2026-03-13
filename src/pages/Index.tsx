@@ -21,7 +21,8 @@ import {
   ArrowUpDown,
   RefreshCw,
 } from "lucide-react";
-import { OrderFilters, EMPTY_FILTERS, type FilterState, type ToggleableColumn } from "@/components/OrderFilters";
+import { OrderFilters, createEmptyFilters, type FilterState, type ToggleableColumn } from "@/components/OrderFilters";
+import { getStatusDisplay } from "@/components/StatusFilter";
 import { SalesOpportunityCell, type SalesOpportunity } from "@/components/SalesOpportunityCell";
 import { ProductDrawer, type ProductDrawerData } from "@/components/ProductDrawer";
 import { toast } from "sonner";
@@ -113,7 +114,7 @@ const Index = () => {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(getStoredPageSize);
-  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+  const [filters, setFilters] = useState<FilterState>({ search: "", clientName: "", productName: "", groupName: "", statuses: [] });
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -347,11 +348,30 @@ const Index = () => {
     };
   }, [allRows, filters]);
 
+  // Extract unique statuses from all rows
+  const availableStatuses = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of allRows) {
+      set.add(r.status || "");
+    }
+    return Array.from(set).sort();
+  }, [allRows]);
+
+  // Initialize statuses filter when availableStatuses changes
+  useEffect(() => {
+    if (availableStatuses.length > 0 && filters.statuses.length === 0) {
+      setFilters((prev) => ({ ...prev, statuses: [...availableStatuses] }));
+    }
+  }, [availableStatuses]);
+
   const filteredRows = useMemo(() => {
     const s = filters.search.toLowerCase();
+    const statusSet = new Set(filters.statuses);
     return allRows.filter((r) => {
       // Jeśli cena (price) wynosi 0, jest pusta (null) lub niezdefiniowana (undefined) - nie pokazuj tego wiersza
       if (!r.price || r.price === 0) return false;
+      // Status filter
+      if (statusSet.size > 0 && !statusSet.has(r.status || "")) return false;
       // Date range filter
       if (dateRange?.from && r.order_date) {
         const d = new Date(r.order_date);
@@ -548,6 +568,7 @@ const Index = () => {
     5 +
     (show("group_name") ? 1 : 0) +
     (show("client_name") ? 1 : 0) +
+    (show("status") ? 1 : 0) +
     (show("order_date") ? 1 : 0) +
     (show("quantity") ? 1 : 0) +
     (show("price") ? 1 : 0);
@@ -581,6 +602,7 @@ const Index = () => {
         clients={filterOptions.clients}
         products={filterOptions.products}
         groups={filterOptions.groups}
+        availableStatuses={availableStatuses}
         pageSize={pageSize}
         onPageSizeChange={(n) => handlePageSizeChange(String(n))}
         pageSizeOptions={PAGE_SIZE_OPTIONS}
@@ -625,14 +647,16 @@ const Index = () => {
                   </TableHead>
                 )}
                 {/* Nowa kolumna Status */}
-                <TableHead
-                  className="font-semibold min-w-[120px] cursor-pointer select-none"
-                  onClick={() => handleSort("status")}
-                >
-                  <span className="inline-flex items-center">
-                    Status <SortIcon column="status" />
-                  </span>
-                </TableHead>
+                {show("status") && (
+                  <TableHead
+                    className="font-semibold min-w-[120px] cursor-pointer select-none"
+                    onClick={() => handleSort("status")}
+                  >
+                    <span className="inline-flex items-center">
+                      Status <SortIcon column="status" />
+                    </span>
+                  </TableHead>
+                )}
                 {show("order_date") && (
                   <TableHead
                     className="font-semibold cursor-pointer select-none"
@@ -754,35 +778,18 @@ const Index = () => {
                       <TableCell className="text-sm text-foreground">{row.client_name || "—"}</TableCell>
                     )}
                     {/* WAGON ZE STATUSEM */}
-                    <TableCell>
-                      {(() => {
-                        const status = row.status?.toLowerCase();
-                        switch (status) {
-                          case "invoiced":
-                            return (
-                              <Badge className="bg-green-100 text-green-800 border-green-200">Zafakturowane</Badge>
-                            );
-                          case "closed":
-                            return (
-                              <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
-                                Zamknięte
-                              </Badge>
-                            );
-                          case "canceled":
-                            return (
-                              <Badge variant="outline" className="text-red-500 border-red-200 bg-red-50">
-                                Anulowane
-                              </Badge>
-                            );
-                          default:
-                            return (
-                              <Badge variant="outline" className="text-muted-foreground italic">
-                                {row.status || "Brak"}
-                              </Badge>
-                            );
-                        }
-                      })()}
-                    </TableCell>
+                    {show("status") && (
+                      <TableCell>
+                        {(() => {
+                          const display = getStatusDisplay(row.status);
+                          return (
+                            <Badge variant="outline" className={display.className}>
+                              {display.label}
+                            </Badge>
+                          );
+                        })()}
+                      </TableCell>
+                    )}
                     {show("order_date") && <TableCell>{row.order_date ? formatDate(row.order_date) : "—"}</TableCell>}
                     {show("quantity") && <TableCell className="text-right">{row.quantity ?? "—"}</TableCell>}
                     {show("price") && (

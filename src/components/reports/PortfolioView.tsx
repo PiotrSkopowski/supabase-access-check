@@ -8,6 +8,7 @@ import {
   ChevronsLeft, ChevronsRight, BarChart3, GitCompare, Info,
   CalendarIcon, Search, Settings, Check,
 } from "lucide-react";
+import { StatusFilter } from "@/components/StatusFilter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -129,6 +130,7 @@ const PortfolioView = ({
   const [thresholds, setThresholds] = useState<SegmentThresholds>(DEFAULT_THRESHOLDS);
   const [draftThresholds, setDraftThresholds] = useState<SegmentThresholds>(DEFAULT_THRESHOLDS);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
 
   // Formatted display values for threshold inputs (draft)
   const [displayARevenue, setDisplayARevenue] = useState(formatWithSpaces(DEFAULT_THRESHOLDS.aMinRevenue));
@@ -161,6 +163,22 @@ const PortfolioView = ({
       return !FORBIDDEN_NAMES.some((f) => name === f);
     });
   }, [orders]);
+
+  /* ── Available statuses from clean orders ── */
+  const availableStatuses = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of cleanOrders) {
+      set.add(o.status || "");
+    }
+    return Array.from(set).sort();
+  }, [cleanOrders]);
+
+  /* ── Initialize selectedStatuses when availableStatuses change ── */
+  useEffect(() => {
+    if (availableStatuses.length > 0 && selectedStatuses.length === 0) {
+      setSelectedStatuses([...availableStatuses]);
+    }
+  }, [availableStatuses]);
 
   /* ── LTM cutoff for segmentation (last 365 days) ── */
   const ltmCutoff = useMemo(() => startOfDay(subDays(new Date(), 365)), []);
@@ -195,10 +213,14 @@ const PortfolioView = ({
     return result;
   }, [ltmOrders, thresholds]);
 
-  /* ── Filter by user-selected date range (for display) ── */
+  /* ── Filter by user-selected date range AND status (for display) ── */
   const filteredOrders = useMemo(() => {
-    if (!dateRange?.from && !dateRange?.to) return cleanOrders;
+    const statusSet = new Set(selectedStatuses);
     return cleanOrders.filter((o) => {
+      // Status filter — filter BEFORE aggregation
+      if (statusSet.size > 0 && !statusSet.has(o.status || "")) return false;
+      // Date range filter
+      if (!dateRange?.from && !dateRange?.to) return true;
       if (!o.order_date) return true;
       if (dateRange.from && dateRange.to) {
         const d = new Date(o.order_date);
@@ -206,7 +228,7 @@ const PortfolioView = ({
       }
       return true;
     });
-  }, [cleanOrders, dateRange]);
+  }, [cleanOrders, dateRange, selectedStatuses]);
 
   /* ── Aggregate clients from filtered orders, segment from LTM ── */
   const clients = useMemo<ClientPortfolioRow[]>(() => {
@@ -590,6 +612,13 @@ const PortfolioView = ({
             </div>
           </PopoverContent>
         </Popover>
+
+        {/* Status Filter */}
+        <StatusFilter
+          availableStatuses={availableStatuses}
+          selectedStatuses={selectedStatuses}
+          onChange={setSelectedStatuses}
+        />
 
         <span className="text-sm text-muted-foreground ml-auto">{filtered.length} klientów</span>
 
