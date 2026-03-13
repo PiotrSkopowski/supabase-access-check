@@ -12,19 +12,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
+import { StatusFilter } from "@/components/StatusFilter";
 
 export interface FilterState {
   search: string;
   clientName: string;
   productName: string;
   groupName: string;
+  statuses: string[];
 }
 
-export type ToggleableColumn = "group_name" | "client_name" | "order_date" | "quantity" | "price";
+export type ToggleableColumn = "group_name" | "client_name" | "order_date" | "quantity" | "price" | "status";
 
 export const TOGGLEABLE_COLUMNS: { key: ToggleableColumn; label: string }[] = [
   { key: "group_name", label: "Grupa Produktowa" },
   { key: "client_name", label: "Klient" },
+  { key: "status", label: "Status" },
   { key: "order_date", label: "Data" },
   { key: "quantity", label: "Ilość" },
   { key: "price", label: "Wycena (Zlec. / Kat.)" },
@@ -36,6 +39,7 @@ interface OrderFiltersProps {
   clients: string[];
   products: string[];
   groups: string[];
+  availableStatuses: string[];
   pageSize: number;
   onPageSizeChange: (size: number) => void;
   pageSizeOptions: readonly number[];
@@ -50,10 +54,15 @@ export const EMPTY_FILTERS: FilterState = {
   clientName: "",
   productName: "",
   groupName: "",
+  statuses: [],
 };
 
-export function OrderFilters({ filters, onChange, clients, products, groups, pageSize, onPageSizeChange, pageSizeOptions, hiddenColumns, onToggleColumn, dateRange, onDateRangeChange }: OrderFiltersProps) {
-  const hasAny = filters.search || filters.clientName || filters.productName || filters.groupName || dateRange?.from;
+export function createEmptyFilters(allStatuses: string[]): FilterState {
+  return { ...EMPTY_FILTERS, statuses: [...allStatuses] };
+}
+
+export function OrderFilters({ filters, onChange, clients, products, groups, availableStatuses, pageSize, onPageSizeChange, pageSizeOptions, hiddenColumns, onToggleColumn, dateRange, onDateRangeChange }: OrderFiltersProps) {
+  const hasAny = filters.search || filters.clientName || filters.productName || filters.groupName || dateRange?.from || filters.statuses.length < availableStatuses.length;
 
   const dateRangeLabel = dateRange?.from && dateRange?.to
     ? `${format(dateRange.from, "dd MMM yyyy", { locale: pl })} – ${format(dateRange.to, "dd MMM yyyy", { locale: pl })}`
@@ -78,7 +87,7 @@ export function OrderFilters({ filters, onChange, clients, products, groups, pag
             size="icon"
             className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
             onClick={() => {
-              onChange(EMPTY_FILTERS);
+              onChange(createEmptyFilters(availableStatuses));
               onDateRangeChange?.(undefined);
             }}
           >
@@ -87,7 +96,7 @@ export function OrderFilters({ filters, onChange, clients, products, groups, pag
         )}
       </div>
 
-      {/* Row 2: Date range + Combobox filters + column toggle + page size */}
+      {/* Row 2: Date range + Combobox filters + status filter + column toggle + page size */}
       <div className="flex flex-wrap gap-3 items-center">
         {onDateRangeChange && (
           <Popover>
@@ -138,6 +147,11 @@ export function OrderFilters({ filters, onChange, clients, products, groups, pag
           className="w-[220px]"
         />
         <div className="flex items-center gap-1.5 ml-auto">
+          <StatusFilter
+            availableStatuses={availableStatuses}
+            selectedStatuses={filters.statuses}
+            onChange={(statuses) => onChange({ ...filters, statuses })}
+          />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-9 gap-1.5">
@@ -175,3 +189,4 @@ export function OrderFilters({ filters, onChange, clients, products, groups, pag
     </div>
   );
 }
+
