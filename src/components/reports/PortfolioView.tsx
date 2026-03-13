@@ -252,22 +252,33 @@ const PortfolioView = ({
       </div>
 
       {/* ── Filters ── */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center print:hidden">
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className={cn("w-full sm:w-[280px] justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {dateRange?.from ? (
-                dateRange.to ? (
-                  <>{format(dateRange.from, "dd MMM yyyy", { locale: pl })} – {format(dateRange.to, "dd MMM yyyy", { locale: pl })}</>
-                ) : format(dateRange.from, "dd MMM yyyy", { locale: pl })
-              ) : "Wybierz zakres dat"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={onDateRangeChange} numberOfMonths={2} className="p-3 pointer-events-auto" locale={pl} />
-          </PopoverContent>
-        </Popover>
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center print:hidden flex-wrap">
+        <div className="flex items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-muted-foreground">Data od</label>
+            <Input
+              type="date"
+              className="w-[180px]"
+              value={dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                onDateRangeChange(val ? { from: new Date(val), to: dateRange?.to } : { from: undefined, to: dateRange?.to });
+              }}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-muted-foreground">Data do</label>
+            <Input
+              type="date"
+              className="w-[180px]"
+              value={dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                onDateRangeChange(val ? { from: dateRange?.from, to: new Date(val) } : { from: dateRange?.from, to: undefined });
+              }}
+            />
+          </div>
+        </div>
 
         <ComboboxFilter
           value={search}
