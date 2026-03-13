@@ -87,7 +87,7 @@ const PortfolioView = ({
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-
+  const [segmentFilter, setSegmentFilter] = useState<SegmentFilter>("all");
   /* ── Filter by date ── */
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
