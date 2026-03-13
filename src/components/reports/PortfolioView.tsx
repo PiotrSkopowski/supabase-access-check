@@ -4,7 +4,7 @@ import { pl } from "date-fns/locale";
 import {
   CalendarIcon, Download, FileText, FileSpreadsheet, Users,
   ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
-  ChevronsLeft, ChevronsRight, BarChart3, GitCompare,
+  ChevronsLeft, ChevronsRight, BarChart3, GitCompare, Filter, Info,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,17 +40,24 @@ export interface ClientPortfolioRow {
 
 type SortKey = "client_name" | "total_revenue" | "order_count" | "rotation_index" | "segment";
 type SortDir = "asc" | "desc";
+type SegmentFilter = "all" | "A" | "B" | "C";
 
 const formatCurrency = (v: number) =>
   v.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
-function getSegment(revenue: number, thresholds: { a: number; b: number }): "A" | "B" | "C" {
-  if (revenue >= thresholds.a) return "A";
-  if (revenue >= thresholds.b) return "B";
+function getSegment(revenue: number, orderCount: number): "A" | "B" | "C" {
+  if (revenue >= 10000 || orderCount >= 5) return "A";
+  if ((revenue >= 2000 && revenue < 10000) || (orderCount >= 2 && orderCount <= 4)) return "B";
   return "C";
 }
+
+const SEGMENT_DESCRIPTIONS: Record<"A" | "B" | "C", string> = {
+  A: "Segment A: Kluczowi klienci (Wysoki obrót lub bardzo częste zamówienia).",
+  B: "Segment B: Klienci stabilni (Średni obrót, regularne zamówienia).",
+  C: "Segment C: Klienci jednorazowi lub z niskim obrotem.",
+};
 
 const segmentColors: Record<string, string> = {
   A: "bg-primary text-primary-foreground",
@@ -80,7 +87,7 @@ const PortfolioView = ({
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-
+  const [segmentFilter, setSegmentFilter] = useState<SegmentFilter>("all");
   /* ── Filter by date ── */
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
@@ -129,18 +136,7 @@ const PortfolioView = ({
       }
     }
 
-    // Calculate ABC thresholds (Pareto: top 20% = A, next 30% = B, rest = C)
-    const revenues = Array.from(map.values()).map((d) => d.revenue).sort((a, b) => b - a);
-    const totalRevenue = revenues.reduce((a, b) => a + b, 0);
-    let cumulative = 0;
-    let thresholdA = 0;
-    let thresholdB = 0;
-    for (let i = 0; i < revenues.length; i++) {
-      cumulative += revenues[i];
-      if (!thresholdA && cumulative >= totalRevenue * 0.8) thresholdA = revenues[i];
-      if (!thresholdB && cumulative >= totalRevenue * 0.95) { thresholdB = revenues[i]; break; }
-    }
-
+    // Calculate rotation index per client
     return Array.from(map.entries()).map(([name, d]) => {
       const sortedDates = d.dates.sort();
       let avgInterval = 0;
@@ -160,7 +156,7 @@ const PortfolioView = ({
         last_order_date: d.lastDate,
         avg_order_value: d.count > 0 ? d.revenue / d.count : 0,
         rotation_index: avgInterval,
-        segment: getSegment(d.revenue, { a: thresholdA, b: thresholdB }),
+        segment: getSegment(d.revenue, d.count),
       };
     });
   }, [filteredOrders]);
@@ -179,6 +175,10 @@ const PortfolioView = ({
     const q = search.toLowerCase().trim();
     let list = q ? clients.filter((c) => c.client_name.toLowerCase().includes(q)) : clients;
 
+    if (segmentFilter !== "all") {
+      list = list.filter((c) => c.segment === segmentFilter);
+    }
+
     list = [...list].sort((a, b) => {
       let cmp = 0;
       switch (sortKey) {
@@ -191,14 +191,14 @@ const PortfolioView = ({
       return sortDir === "asc" ? cmp : -cmp;
     });
     return list;
-  }, [clients, search, sortKey, sortDir]);
+  }, [clients, search, sortKey, sortDir, segmentFilter]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("desc"); }
   };
 
-  useEffect(() => { setPage(0); }, [search, sortKey, sortDir, pageSize]);
+  useEffect(() => { setPage(0); }, [search, sortKey, sortDir, pageSize, segmentFilter]);
 
   const totalPages = Math.ceil(filtered.length / pageSize);
   const pageRows = useMemo(
@@ -278,7 +278,22 @@ const PortfolioView = ({
           className="w-full sm:w-[280px]"
         />
 
-        <span className="text-sm text-muted-foreground ml-auto">{clients.length} klientów</span>
+        <Select value={segmentFilter} onValueChange={(v) => setSegmentFilter(v as SegmentFilter)}>
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              <SelectValue placeholder="Segment" />
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Wszystkie segmenty</SelectItem>
+            <SelectItem value="A">Segment A</SelectItem>
+            <SelectItem value="B">Segment B</SelectItem>
+            <SelectItem value="C">Segment C</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <span className="text-sm text-muted-foreground ml-auto">{filtered.length} klientów</span>
 
         {selected.size >= 2 && (
           <Button variant="default" size="sm" className="gap-1.5" onClick={() => onCompare(Array.from(selected))}>
@@ -304,6 +319,14 @@ const PortfolioView = ({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* ── Segment Info Bar ── */}
+      {segmentFilter !== "all" && (
+        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-4 py-2.5 text-sm text-muted-foreground print:hidden">
+          <Info className="h-4 w-4 shrink-0 text-primary" />
+          {SEGMENT_DESCRIPTIONS[segmentFilter]}
+        </div>
+      )}
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
