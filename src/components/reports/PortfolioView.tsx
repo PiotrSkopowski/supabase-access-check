@@ -4,7 +4,7 @@ import { pl } from "date-fns/locale";
 import {
   CalendarIcon, Download, FileText, FileSpreadsheet, Users,
   ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
-  ChevronsLeft, ChevronsRight, BarChart3, GitCompare,
+  ChevronsLeft, ChevronsRight, BarChart3, GitCompare, Filter, Info,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
