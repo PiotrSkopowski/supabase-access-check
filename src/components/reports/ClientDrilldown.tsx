@@ -83,8 +83,9 @@ const ClientDrilldown = ({ clientName, orders: rawOrders, dateRange: initialDate
 
   /* ── Monthly Trendline ── */
   const trendData = useMemo(() => {
+    // Build month map from filtered orders
     const monthMap = new Map<string, { revenue: number; count: number }>();
-    for (const o of clientOrders) {
+    for (const o of filteredOrders) {
       if (!o.order_date) continue;
       const d = new Date(o.order_date);
       const key = format(d, "yyyy-MM");
@@ -95,10 +96,38 @@ const ClientDrilldown = ({ clientName, orders: rawOrders, dateRange: initialDate
       existing.count += 1;
       monthMap.set(key, existing);
     }
-    return Array.from(monthMap.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([month, d]) => ({ month: format(new Date(month + "-01"), "MMM yy", { locale: pl }), revenue: d.revenue, orders: d.count }));
-  }, [clientOrders]);
+
+    // Determine range for zero-filling
+    let rangeFrom: Date;
+    let rangeTo: Date;
+    if (dateRange?.from && dateRange?.to) {
+      rangeFrom = dateRange.from;
+      rangeTo = dateRange.to;
+    } else if (dateRange?.from) {
+      rangeFrom = dateRange.from;
+      rangeTo = new Date();
+    } else {
+      // Use full client history range
+      const allDates = filteredOrders
+        .filter((o) => o.order_date)
+        .map((o) => new Date(o.order_date));
+      if (allDates.length === 0) return [];
+      rangeFrom = new Date(Math.min(...allDates.map((d) => d.getTime())));
+      rangeTo = new Date(Math.max(...allDates.map((d) => d.getTime())));
+    }
+
+    // Generate continuous months
+    const months = eachMonthOfInterval({ start: startOfMonth(rangeFrom), end: endOfMonth(rangeTo) });
+    return months.map((m) => {
+      const key = format(m, "yyyy-MM");
+      const data = monthMap.get(key) || { revenue: 0, count: 0 };
+      return {
+        month: format(m, "MMM yy", { locale: pl }),
+        revenue: data.revenue,
+        orders: data.count,
+      };
+    });
+  }, [filteredOrders, dateRange]);
 
   /* ── Alert: >20% drop ── */
   const trendAlert = useMemo(() => {
