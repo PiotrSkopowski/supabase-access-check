@@ -50,13 +50,14 @@ interface OrderRow {
   id?: string;
   product_name: string;
   client_name: string | null;
-  description: string | null;
   price: number | null;
   currency: string | null;
   quantity: number | null;
   order_date: string | null;
   group_name?: string | null;
   product_id?: string | null;
+  status?: string | null;
+  description: string | null;
 }
 
 interface ResultRow extends OrderRow {
@@ -78,7 +79,8 @@ type SortKey =
   | "diff"
   | "szansa"
   | "prodio"
-  | "plik";
+  | "plik"
+  | "status";
 type SortDir = "asc" | "desc";
 
 const formatDate = (iso: string) =>
