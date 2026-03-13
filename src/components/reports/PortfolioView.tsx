@@ -130,6 +130,7 @@ const PortfolioView = ({
   const [thresholds, setThresholds] = useState<SegmentThresholds>(DEFAULT_THRESHOLDS);
   const [draftThresholds, setDraftThresholds] = useState<SegmentThresholds>(DEFAULT_THRESHOLDS);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
 
   // Formatted display values for threshold inputs (draft)
   const [displayARevenue, setDisplayARevenue] = useState(formatWithSpaces(DEFAULT_THRESHOLDS.aMinRevenue));
