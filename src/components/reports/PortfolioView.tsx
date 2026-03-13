@@ -278,7 +278,22 @@ const PortfolioView = ({
           className="w-full sm:w-[280px]"
         />
 
-        <span className="text-sm text-muted-foreground ml-auto">{clients.length} klientów</span>
+        <Select value={segmentFilter} onValueChange={(v) => setSegmentFilter(v as SegmentFilter)}>
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              <SelectValue placeholder="Segment" />
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Wszystkie segmenty</SelectItem>
+            <SelectItem value="A">Segment A</SelectItem>
+            <SelectItem value="B">Segment B</SelectItem>
+            <SelectItem value="C">Segment C</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <span className="text-sm text-muted-foreground ml-auto">{filtered.length} klientów</span>
 
         {selected.size >= 2 && (
           <Button variant="default" size="sm" className="gap-1.5" onClick={() => onCompare(Array.from(selected))}>
@@ -304,6 +319,14 @@ const PortfolioView = ({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* ── Segment Info Bar ── */}
+      {segmentFilter !== "all" && (
+        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-4 py-2.5 text-sm text-muted-foreground print:hidden">
+          <Info className="h-4 w-4 shrink-0 text-primary" />
+          {SEGMENT_DESCRIPTIONS[segmentFilter]}
+        </div>
+      )}
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
