@@ -54,9 +54,9 @@ interface ClientDrilldownProps {
   onBack: () => void;
 }
 
-const ClientDrilldown = ({ clientName, orders: rawOrders, dateRange, onBack }: ClientDrilldownProps) => {
+const ClientDrilldown = ({ clientName, orders: rawOrders, dateRange: initialDateRange, onBack }: ClientDrilldownProps) => {
   const orders = rawOrders ?? [];
-
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(initialDateRange);
   const productIdMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const o of orders) {
