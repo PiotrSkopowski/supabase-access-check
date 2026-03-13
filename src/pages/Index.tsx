@@ -112,6 +112,7 @@ const Index = () => {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(getStoredPageSize);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [hiddenColumns, setHiddenColumns] = useState<Set<ToggleableColumn>>(getStoredHiddenCols);
