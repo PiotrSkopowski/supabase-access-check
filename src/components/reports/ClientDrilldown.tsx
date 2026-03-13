@@ -234,17 +234,52 @@ const ClientDrilldown = ({ clientName, orders: rawOrders, dateRange: initialDate
     );
   };
 
+  const dateRangeLabel = dateRange?.from && dateRange?.to
+    ? `${format(dateRange.from, "dd MMM yyyy", { locale: pl })} – ${format(dateRange.to, "dd MMM yyyy", { locale: pl })}`
+    : dateRange?.from
+      ? `Od ${format(dateRange.from, "dd MMM yyyy", { locale: pl })}`
+      : "Cały okres";
+
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="flex items-center gap-4 print:hidden">
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
         <Button variant="ghost" size="sm" onClick={onBack} className="gap-1.5">
           <ArrowLeft className="h-4 w-4" /> Powrót
         </Button>
-        <h2 className="text-xl font-bold text-foreground flex-1">{clientName}</h2>
+        <h2 className="text-xl font-bold text-foreground">{clientName}</h2>
+        <div className="flex-1" />
+
+        {/* DateRangePicker */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className={cn("h-10 rounded-md text-sm justify-start min-w-[240px]", !dateRange?.from && "text-muted-foreground")}>
+              <CalendarIcon className="h-4 w-4 mr-2" />
+              {dateRangeLabel}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <Calendar
+              mode="range"
+              selected={dateRange}
+              onSelect={setDateRange}
+              numberOfMonths={2}
+              locale={pl}
+              className="p-3 pointer-events-auto"
+            />
+            {dateRange?.from && (
+              <div className="border-t px-3 py-2">
+                <Button variant="ghost" size="sm" className="text-xs" onClick={() => setDateRange(undefined)}>
+                  Wyczyść daty
+                </Button>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5">
+            <Button variant="outline" size="sm" className="h-10 rounded-md gap-1.5">
               <Download className="h-4 w-4" /> Eksportuj
             </Button>
           </DropdownMenuTrigger>
