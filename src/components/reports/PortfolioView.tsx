@@ -508,7 +508,7 @@ const PortfolioView = ({
         </Select>
 
         {/* Segmentation Settings (Popover) */}
-        <Popover>
+        <Popover open={settingsOpen} onOpenChange={handleSettingsOpen}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
@@ -520,12 +520,14 @@ const PortfolioView = ({
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80" align="start">
-            <div className="space-y-4">
-              <p className="text-sm font-semibold text-foreground">⚙️ Segmentacja (LTM)</p>
-              <p className="text-xs text-muted-foreground">Progi liczone na bazie ostatnich 365 dni.</p>
+            <div className="space-y-5">
+              <div>
+                <p className="text-sm font-semibold text-foreground">⚙️ Segmentacja (LTM)</p>
+                <p className="text-xs text-muted-foreground mt-1">Progi liczone na bazie ostatnich 365 dni.</p>
+              </div>
 
-              <div className="space-y-2">
-                <h4 className="text-xs font-semibold text-foreground">Segment A (Kluczowi)</h4>
+              <div className="space-y-2 rounded-md border border-border p-3 bg-muted/30">
+                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Segment A — Kluczowi</h4>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs">Min. obrót (PLN)</Label>
@@ -536,7 +538,7 @@ const PortfolioView = ({
                         const raw = e.target.value.replace(/[^\d]/g, "");
                         const num = Number(raw) || 0;
                         setDisplayARevenue(raw ? formatWithSpaces(num) : "");
-                        setThresholds((p) => ({ ...p, aMinRevenue: num }));
+                        setDraftThresholds((p) => ({ ...p, aMinRevenue: num }));
                       }}
                     />
                   </div>
@@ -544,16 +546,16 @@ const PortfolioView = ({
                     <Label className="text-xs">Min. zamówień</Label>
                     <Input
                       type="number"
-                      value={thresholds.aMinOrders}
+                      value={draftThresholds.aMinOrders}
                       className="h-9 text-sm"
-                      onChange={(e) => setThresholds((p) => ({ ...p, aMinOrders: Number(e.target.value) || 0 }))}
+                      onChange={(e) => setDraftThresholds((p) => ({ ...p, aMinOrders: Number(e.target.value) || 0 }))}
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <h4 className="text-xs font-semibold text-foreground">Segment B (Stabilni)</h4>
+              <div className="space-y-2 rounded-md border border-border p-3 bg-muted/30">
+                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Segment B — Stabilni</h4>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs">Min. obrót (PLN)</Label>
@@ -564,7 +566,7 @@ const PortfolioView = ({
                         const raw = e.target.value.replace(/[^\d]/g, "");
                         const num = Number(raw) || 0;
                         setDisplayBRevenue(raw ? formatWithSpaces(num) : "");
-                        setThresholds((p) => ({ ...p, bMinRevenue: num }));
+                        setDraftThresholds((p) => ({ ...p, bMinRevenue: num }));
                       }}
                     />
                   </div>
@@ -572,15 +574,19 @@ const PortfolioView = ({
                     <Label className="text-xs">Min. zamówień</Label>
                     <Input
                       type="number"
-                      value={thresholds.bMinOrders}
+                      value={draftThresholds.bMinOrders}
                       className="h-9 text-sm"
-                      onChange={(e) => setThresholds((p) => ({ ...p, bMinOrders: Number(e.target.value) || 0 }))}
+                      onChange={(e) => setDraftThresholds((p) => ({ ...p, bMinOrders: Number(e.target.value) || 0 }))}
                     />
                   </div>
                 </div>
               </div>
 
               <p className="text-xs text-muted-foreground">Segment C: Poniżej progów B.</p>
+
+              <Button className="w-full h-9 text-sm" onClick={handleSaveThresholds}>
+                Zapisz ustawienia
+              </Button>
             </div>
           </PopoverContent>
         </Popover>
