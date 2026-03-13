@@ -581,6 +581,8 @@ const Index = () => {
         pageSizeOptions={PAGE_SIZE_OPTIONS}
         hiddenColumns={hiddenColumns}
         onToggleColumn={toggleColumn}
+        dateRange={dateRange}
+        onDateRangeChange={setDateRange}
       />
 
       <Card className="shadow-sm overflow-hidden">
