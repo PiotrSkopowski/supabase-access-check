@@ -78,7 +78,8 @@ type SortKey =
   | "diff"
   | "szansa"
   | "prodio"
-  | "plik";
+  | "plik"
+  | "status";
 type SortDir = "asc" | "desc";
 
 const formatDate = (iso: string) =>
