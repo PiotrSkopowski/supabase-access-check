@@ -164,6 +164,22 @@ const PortfolioView = ({
     });
   }, [orders]);
 
+  /* ── Available statuses from clean orders ── */
+  const availableStatuses = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of cleanOrders) {
+      set.add(o.status || "");
+    }
+    return Array.from(set).sort();
+  }, [cleanOrders]);
+
+  /* ── Initialize selectedStatuses when availableStatuses change ── */
+  useEffect(() => {
+    if (availableStatuses.length > 0 && selectedStatuses.length === 0) {
+      setSelectedStatuses([...availableStatuses]);
+    }
+  }, [availableStatuses]);
+
   /* ── LTM cutoff for segmentation (last 365 days) ── */
   const ltmCutoff = useMemo(() => startOfDay(subDays(new Date(), 365)), []);
 
