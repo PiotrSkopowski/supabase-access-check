@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { format, differenceInDays, isWithinInterval, startOfDay, endOfDay } from "date-fns";
+import { format, differenceInDays, isWithinInterval, startOfDay, endOfDay, subDays } from "date-fns";
 import { pl } from "date-fns/locale";
 import {
   Download, FileText, FileSpreadsheet, Users,
@@ -24,9 +24,6 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
-} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
@@ -68,6 +65,19 @@ const DEFAULT_THRESHOLDS: SegmentThresholds = {
 const formatCurrency = (v: number) =>
   v.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** Format number with space as thousands separator for display */
+const formatWithSpaces = (v: number): string => {
+  if (!v && v !== 0) return "";
+  return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+};
+
+/** Parse space-formatted string back to number */
+const parseSpaced = (s: string): number => {
+  const cleaned = s.replace(/\s/g, "");
+  const n = Number(cleaned);
+  return isNaN(n) ? 0 : n;
+};
+
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
 function getSegment(revenue: number, orderCount: number, t: SegmentThresholds): "A" | "B" | "C" {
@@ -107,31 +117,73 @@ const PortfolioView = ({
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
   const [clientSearch, setClientSearch] = useState("");
   const [thresholds, setThresholds] = useState<SegmentThresholds>(DEFAULT_THRESHOLDS);
-  const [tempThresholds, setTempThresholds] = useState<SegmentThresholds>(DEFAULT_THRESHOLDS);
 
-  /* ── Filter by date, exclude forbidden ── */
-  const filteredOrders = useMemo(() => {
+  // Formatted display values for threshold inputs
+  const [displayARevenue, setDisplayARevenue] = useState(formatWithSpaces(DEFAULT_THRESHOLDS.aMinRevenue));
+  const [displayBRevenue, setDisplayBRevenue] = useState(formatWithSpaces(DEFAULT_THRESHOLDS.bMinRevenue));
+
+  /* ── Clean orders: exclude forbidden names ── */
+  const cleanOrders = useMemo(() => {
     return orders.filter((o) => {
       const name = (o.client_name ?? "").trim().toLowerCase();
-      if (FORBIDDEN_NAMES.some((f) => name === f)) return false;
-      if (dateRange?.from && dateRange?.to && o.order_date) {
+      return !FORBIDDEN_NAMES.some((f) => name === f);
+    });
+  }, [orders]);
+
+  /* ── LTM cutoff for segmentation (last 365 days) ── */
+  const ltmCutoff = useMemo(() => startOfDay(subDays(new Date(), 365)), []);
+
+  /* ── Orders filtered by LTM for segmentation ── */
+  const ltmOrders = useMemo(() => {
+    return cleanOrders.filter((o) => {
+      if (!o.order_date) return false;
+      return new Date(o.order_date) >= ltmCutoff;
+    });
+  }, [cleanOrders, ltmCutoff]);
+
+  /* ── Build LTM-based segment map ── */
+  const ltmSegmentMap = useMemo(() => {
+    const map = new Map<string, { revenue: number; count: number }>();
+    for (const o of ltmOrders) {
+      const name = (o.client_name ?? "").trim();
+      if (!name) continue;
+      const value = (Number(o.price) || 0) * (Number(o.quantity) || 0);
+      const existing = map.get(name);
+      if (existing) {
+        existing.revenue += value;
+        existing.count += 1;
+      } else {
+        map.set(name, { revenue: value, count: 1 });
+      }
+    }
+    const result = new Map<string, "A" | "B" | "C">();
+    for (const [name, d] of map) {
+      result.set(name, getSegment(d.revenue, d.count, thresholds));
+    }
+    return result;
+  }, [ltmOrders, thresholds]);
+
+  /* ── Filter by user-selected date range (for display) ── */
+  const filteredOrders = useMemo(() => {
+    if (!dateRange?.from && !dateRange?.to) return cleanOrders;
+    return cleanOrders.filter((o) => {
+      if (!o.order_date) return true;
+      if (dateRange.from && dateRange.to) {
         const d = new Date(o.order_date);
-        if (!isWithinInterval(d, { start: startOfDay(dateRange.from), end: endOfDay(dateRange.to) })) return false;
+        return isWithinInterval(d, { start: startOfDay(dateRange.from), end: endOfDay(dateRange.to) });
       }
       return true;
     });
-  }, [orders, dateRange]);
+  }, [cleanOrders, dateRange]);
 
-  /* ── Aggregate clients ── */
+  /* ── Aggregate clients from filtered orders, segment from LTM ── */
   const clients = useMemo<ClientPortfolioRow[]>(() => {
     const map = new Map<string, { revenue: number; count: number; products: Set<string>; dates: string[]; lastDate: string | null }>();
 
     for (const o of filteredOrders) {
       const name = (o.client_name ?? "").trim();
       if (!name) continue;
-      const price = Number(o.price) || 0;
-      const qty = Number(o.quantity) || 0;
-      const value = price * qty;
+      const value = (Number(o.price) || 0) * (Number(o.quantity) || 0);
       const date = o.order_date ?? null;
       const productName = (o.product_name ?? "").trim();
 
@@ -168,10 +220,10 @@ const PortfolioView = ({
         last_order_date: d.lastDate,
         avg_order_value: d.count > 0 ? d.revenue / d.count : 0,
         rotation_index: avgInterval,
-        segment: getSegment(d.revenue, d.count, thresholds),
+        segment: ltmSegmentMap.get(name) ?? "C",
       };
     });
-  }, [filteredOrders, thresholds]);
+  }, [filteredOrders, ltmSegmentMap]);
 
   /* ── Clients filtered by segment (for client filter list) ── */
   const clientsForFilter = useMemo(() => {
@@ -193,15 +245,12 @@ const PortfolioView = ({
   /* ── Filter + Sort ── */
   const filtered = useMemo(() => {
     let list = clients;
-
     if (segmentFilter !== "all") {
       list = list.filter((c) => c.segment === segmentFilter);
     }
-
     if (selectedClients.size > 0) {
       list = list.filter((c) => selectedClients.has(c.client_name));
     }
-
     list = [...list].sort((a, b) => {
       let cmp = 0;
       switch (sortKey) {
@@ -216,7 +265,7 @@ const PortfolioView = ({
     return list;
   }, [clients, sortKey, sortDir, segmentFilter, selectedClients]);
 
-  /* ── KPIs based on filtered data ── */
+  /* ── KPIs ── */
   const kpis = useMemo(() => {
     const totalRev = filtered.reduce((s, c) => s + c.total_revenue, 0);
     const segA = filtered.filter((c) => c.segment === "A");
@@ -293,9 +342,9 @@ const PortfolioView = ({
       : "Cały okres";
 
   const segmentDescription = segmentFilter === "all" ? null
-    : segmentFilter === "A" ? `Segment A: Obrót ≥ ${formatCurrency(thresholds.aMinRevenue)} PLN lub min. ${thresholds.aMinOrders} zamówień.`
-    : segmentFilter === "B" ? `Segment B: Obrót ≥ ${formatCurrency(thresholds.bMinRevenue)} PLN lub min. ${thresholds.bMinOrders} zamówień.`
-    : "Segment C: Pozostali klienci poniżej progów Segmentu B.";
+    : segmentFilter === "A" ? `Segment A: Obrót ≥ ${formatWithSpaces(thresholds.aMinRevenue)} PLN lub min. ${thresholds.aMinOrders} zamówień (LTM).`
+    : segmentFilter === "B" ? `Segment B: Obrót ≥ ${formatWithSpaces(thresholds.bMinRevenue)} PLN lub min. ${thresholds.bMinOrders} zamówień (LTM).`
+    : "Segment C: Pozostali klienci poniżej progów Segmentu B (LTM).";
 
   return (
     <div className="space-y-4">
@@ -362,7 +411,13 @@ const PortfolioView = ({
                 variant="ghost"
                 size="sm"
                 className="h-7 text-xs"
-                onClick={() => setSelectedClients(new Set(visibleClientNames))}
+                onClick={() => {
+                  setSelectedClients((prev) => {
+                    const next = new Set(prev);
+                    visibleClientNames.forEach((n) => next.add(n));
+                    return next;
+                  });
+                }}
               >
                 Zaznacz widoczne
               </Button>
@@ -420,57 +475,83 @@ const PortfolioView = ({
           </SelectContent>
         </Select>
 
-        {/* Segmentation Settings */}
-        <Dialog>
-          <DialogTrigger asChild>
+        {/* Segmentation Settings (Popover) */}
+        <Popover>
+          <PopoverTrigger asChild>
             <Button
               variant="outline"
               size="icon"
               className="h-10 w-10 rounded-md"
-              onClick={() => setTempThresholds(thresholds)}
+              title="Ustawienia Segmentacji"
             >
               <Settings className="h-4 w-4" />
             </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>⚙️ Ustawienia Segmentacji</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-5 pt-2">
-              <div className="space-y-3">
-                <h4 className="text-sm font-semibold text-foreground">Segment A (Kluczowi)</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
+          </PopoverTrigger>
+          <PopoverContent className="w-80" align="start">
+            <div className="space-y-4">
+              <p className="text-sm font-semibold text-foreground">⚙️ Segmentacja (LTM)</p>
+              <p className="text-xs text-muted-foreground">Progi liczone na bazie ostatnich 365 dni.</p>
+
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-foreground">Segment A (Kluczowi)</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
                     <Label className="text-xs">Min. obrót (PLN)</Label>
-                    <Input type="number" value={tempThresholds.aMinRevenue} onChange={(e) => setTempThresholds((p) => ({ ...p, aMinRevenue: Number(e.target.value) }))} />
+                    <Input
+                      value={displayARevenue}
+                      className="h-9 text-sm"
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^\d]/g, "");
+                        const num = Number(raw) || 0;
+                        setDisplayARevenue(raw ? formatWithSpaces(num) : "");
+                        setThresholds((p) => ({ ...p, aMinRevenue: num }));
+                      }}
+                    />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <Label className="text-xs">Min. zamówień</Label>
-                    <Input type="number" value={tempThresholds.aMinOrders} onChange={(e) => setTempThresholds((p) => ({ ...p, aMinOrders: Number(e.target.value) }))} />
+                    <Input
+                      type="number"
+                      value={thresholds.aMinOrders}
+                      className="h-9 text-sm"
+                      onChange={(e) => setThresholds((p) => ({ ...p, aMinOrders: Number(e.target.value) || 0 }))}
+                    />
                   </div>
                 </div>
               </div>
-              <div className="space-y-3">
-                <h4 className="text-sm font-semibold text-foreground">Segment B (Stabilni)</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
+
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-foreground">Segment B (Stabilni)</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
                     <Label className="text-xs">Min. obrót (PLN)</Label>
-                    <Input type="number" value={tempThresholds.bMinRevenue} onChange={(e) => setTempThresholds((p) => ({ ...p, bMinRevenue: Number(e.target.value) }))} />
+                    <Input
+                      value={displayBRevenue}
+                      className="h-9 text-sm"
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^\d]/g, "");
+                        const num = Number(raw) || 0;
+                        setDisplayBRevenue(raw ? formatWithSpaces(num) : "");
+                        setThresholds((p) => ({ ...p, bMinRevenue: num }));
+                      }}
+                    />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <Label className="text-xs">Min. zamówień</Label>
-                    <Input type="number" value={tempThresholds.bMinOrders} onChange={(e) => setTempThresholds((p) => ({ ...p, bMinOrders: Number(e.target.value) }))} />
+                    <Input
+                      type="number"
+                      value={thresholds.bMinOrders}
+                      className="h-9 text-sm"
+                      onChange={(e) => setThresholds((p) => ({ ...p, bMinOrders: Number(e.target.value) || 0 }))}
+                    />
                   </div>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">Segment C: Wszyscy poniżej progów Segmentu B.</p>
-              <Button className="w-full" onClick={() => setThresholds(tempThresholds)}>
-                <Check className="h-4 w-4 mr-2" />
-                Zastosuj progi
-              </Button>
+
+              <p className="text-xs text-muted-foreground">Segment C: Poniżej progów B.</p>
             </div>
-          </DialogContent>
-        </Dialog>
+          </PopoverContent>
+        </Popover>
 
         <span className="text-sm text-muted-foreground ml-auto">{filtered.length} klientów</span>
 
