@@ -3,9 +3,12 @@ import { format, differenceInDays, isWithinInterval, startOfDay, endOfDay, subMo
 import { pl } from "date-fns/locale";
 import {
   ArrowLeft, TrendingUp, TrendingDown, AlertTriangle, ExternalLink,
-  DollarSign, Package, BarChart3, Clock, Download, FileText, FileSpreadsheet,
+  DollarSign, Package, BarChart3, Clock, Download, FileText, FileSpreadsheet, CalendarIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
