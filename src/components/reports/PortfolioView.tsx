@@ -127,10 +127,32 @@ const PortfolioView = ({
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
   const [clientSearch, setClientSearch] = useState("");
   const [thresholds, setThresholds] = useState<SegmentThresholds>(DEFAULT_THRESHOLDS);
+  const [draftThresholds, setDraftThresholds] = useState<SegmentThresholds>(DEFAULT_THRESHOLDS);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Formatted display values for threshold inputs
+  // Formatted display values for threshold inputs (draft)
   const [displayARevenue, setDisplayARevenue] = useState(formatWithSpaces(DEFAULT_THRESHOLDS.aMinRevenue));
   const [displayBRevenue, setDisplayBRevenue] = useState(formatWithSpaces(DEFAULT_THRESHOLDS.bMinRevenue));
+
+  // Sync draft when popover opens
+  const handleSettingsOpen = useCallback((open: boolean) => {
+    if (open) {
+      setDraftThresholds(thresholds);
+      setDisplayARevenue(formatWithSpaces(thresholds.aMinRevenue));
+      setDisplayBRevenue(formatWithSpaces(thresholds.bMinRevenue));
+    }
+    setSettingsOpen(open);
+  }, [thresholds]);
+
+  const handleSaveThresholds = useCallback(() => {
+    setThresholds(draftThresholds);
+    localStorage.setItem(LS_KEYS.aRevenue, String(draftThresholds.aMinRevenue));
+    localStorage.setItem(LS_KEYS.aOrders, String(draftThresholds.aMinOrders));
+    localStorage.setItem(LS_KEYS.bRevenue, String(draftThresholds.bMinRevenue));
+    localStorage.setItem(LS_KEYS.bOrders, String(draftThresholds.bMinOrders));
+    setSettingsOpen(false);
+    toast.success("Ustawienia segmentacji zostały zapisane");
+  }, [draftThresholds]);
 
   /* ── Clean orders: exclude forbidden names ── */
   const cleanOrders = useMemo(() => {
