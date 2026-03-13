@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import { format, differenceInDays, isWithinInterval, startOfDay, endOfDay, subDays } from "date-fns";
 import { pl } from "date-fns/locale";
 import {
@@ -55,12 +56,21 @@ interface SegmentThresholds {
   bMinOrders: number;
 }
 
-const DEFAULT_THRESHOLDS: SegmentThresholds = {
-  aMinRevenue: 10000,
-  aMinOrders: 5,
-  bMinRevenue: 2000,
-  bMinOrders: 2,
+const LS_KEYS = {
+  aRevenue: "toptech-segment-a-revenue",
+  aOrders: "toptech-segment-a-orders",
+  bRevenue: "toptech-segment-b-revenue",
+  bOrders: "toptech-segment-b-orders",
 };
+
+const loadThresholds = (): SegmentThresholds => ({
+  aMinRevenue: Number(localStorage.getItem(LS_KEYS.aRevenue)) || 10000,
+  aMinOrders: Number(localStorage.getItem(LS_KEYS.aOrders)) || 5,
+  bMinRevenue: Number(localStorage.getItem(LS_KEYS.bRevenue)) || 2000,
+  bMinOrders: Number(localStorage.getItem(LS_KEYS.bOrders)) || 2,
+});
+
+const DEFAULT_THRESHOLDS: SegmentThresholds = loadThresholds();
 
 const formatCurrency = (v: number) =>
   v.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -117,10 +127,32 @@ const PortfolioView = ({
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
   const [clientSearch, setClientSearch] = useState("");
   const [thresholds, setThresholds] = useState<SegmentThresholds>(DEFAULT_THRESHOLDS);
+  const [draftThresholds, setDraftThresholds] = useState<SegmentThresholds>(DEFAULT_THRESHOLDS);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Formatted display values for threshold inputs
+  // Formatted display values for threshold inputs (draft)
   const [displayARevenue, setDisplayARevenue] = useState(formatWithSpaces(DEFAULT_THRESHOLDS.aMinRevenue));
   const [displayBRevenue, setDisplayBRevenue] = useState(formatWithSpaces(DEFAULT_THRESHOLDS.bMinRevenue));
+
+  // Sync draft when popover opens
+  const handleSettingsOpen = useCallback((open: boolean) => {
+    if (open) {
+      setDraftThresholds(thresholds);
+      setDisplayARevenue(formatWithSpaces(thresholds.aMinRevenue));
+      setDisplayBRevenue(formatWithSpaces(thresholds.bMinRevenue));
+    }
+    setSettingsOpen(open);
+  }, [thresholds]);
+
+  const handleSaveThresholds = useCallback(() => {
+    setThresholds(draftThresholds);
+    localStorage.setItem(LS_KEYS.aRevenue, String(draftThresholds.aMinRevenue));
+    localStorage.setItem(LS_KEYS.aOrders, String(draftThresholds.aMinOrders));
+    localStorage.setItem(LS_KEYS.bRevenue, String(draftThresholds.bMinRevenue));
+    localStorage.setItem(LS_KEYS.bOrders, String(draftThresholds.bMinOrders));
+    setSettingsOpen(false);
+    toast.success("Ustawienia segmentacji zostały zapisane");
+  }, [draftThresholds]);
 
   /* ── Clean orders: exclude forbidden names ── */
   const cleanOrders = useMemo(() => {
@@ -476,7 +508,7 @@ const PortfolioView = ({
         </Select>
 
         {/* Segmentation Settings (Popover) */}
-        <Popover>
+        <Popover open={settingsOpen} onOpenChange={handleSettingsOpen}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
@@ -488,12 +520,14 @@ const PortfolioView = ({
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80" align="start">
-            <div className="space-y-4">
-              <p className="text-sm font-semibold text-foreground">⚙️ Segmentacja (LTM)</p>
-              <p className="text-xs text-muted-foreground">Progi liczone na bazie ostatnich 365 dni.</p>
+            <div className="space-y-5">
+              <div>
+                <p className="text-sm font-semibold text-foreground">⚙️ Segmentacja (LTM)</p>
+                <p className="text-xs text-muted-foreground mt-1">Progi liczone na bazie ostatnich 365 dni.</p>
+              </div>
 
-              <div className="space-y-2">
-                <h4 className="text-xs font-semibold text-foreground">Segment A (Kluczowi)</h4>
+              <div className="space-y-2 rounded-md border border-border p-3 bg-muted/30">
+                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Segment A — Kluczowi</h4>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs">Min. obrót (PLN)</Label>
@@ -504,7 +538,7 @@ const PortfolioView = ({
                         const raw = e.target.value.replace(/[^\d]/g, "");
                         const num = Number(raw) || 0;
                         setDisplayARevenue(raw ? formatWithSpaces(num) : "");
-                        setThresholds((p) => ({ ...p, aMinRevenue: num }));
+                        setDraftThresholds((p) => ({ ...p, aMinRevenue: num }));
                       }}
                     />
                   </div>
@@ -512,16 +546,16 @@ const PortfolioView = ({
                     <Label className="text-xs">Min. zamówień</Label>
                     <Input
                       type="number"
-                      value={thresholds.aMinOrders}
+                      value={draftThresholds.aMinOrders}
                       className="h-9 text-sm"
-                      onChange={(e) => setThresholds((p) => ({ ...p, aMinOrders: Number(e.target.value) || 0 }))}
+                      onChange={(e) => setDraftThresholds((p) => ({ ...p, aMinOrders: Number(e.target.value) || 0 }))}
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <h4 className="text-xs font-semibold text-foreground">Segment B (Stabilni)</h4>
+              <div className="space-y-2 rounded-md border border-border p-3 bg-muted/30">
+                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Segment B — Stabilni</h4>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs">Min. obrót (PLN)</Label>
@@ -532,7 +566,7 @@ const PortfolioView = ({
                         const raw = e.target.value.replace(/[^\d]/g, "");
                         const num = Number(raw) || 0;
                         setDisplayBRevenue(raw ? formatWithSpaces(num) : "");
-                        setThresholds((p) => ({ ...p, bMinRevenue: num }));
+                        setDraftThresholds((p) => ({ ...p, bMinRevenue: num }));
                       }}
                     />
                   </div>
@@ -540,15 +574,19 @@ const PortfolioView = ({
                     <Label className="text-xs">Min. zamówień</Label>
                     <Input
                       type="number"
-                      value={thresholds.bMinOrders}
+                      value={draftThresholds.bMinOrders}
                       className="h-9 text-sm"
-                      onChange={(e) => setThresholds((p) => ({ ...p, bMinOrders: Number(e.target.value) || 0 }))}
+                      onChange={(e) => setDraftThresholds((p) => ({ ...p, bMinOrders: Number(e.target.value) || 0 }))}
                     />
                   </div>
                 </div>
               </div>
 
               <p className="text-xs text-muted-foreground">Segment C: Poniżej progów B.</p>
+
+              <Button className="w-full h-9 text-sm" onClick={handleSaveThresholds}>
+                Zapisz ustawienia
+              </Button>
             </div>
           </PopoverContent>
         </Popover>
