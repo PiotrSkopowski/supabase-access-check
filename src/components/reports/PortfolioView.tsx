@@ -198,7 +198,7 @@ const PortfolioView = ({
     else { setSortKey(key); setSortDir("desc"); }
   };
 
-  useEffect(() => { setPage(0); }, [search, sortKey, sortDir, pageSize]);
+  useEffect(() => { setPage(0); }, [search, sortKey, sortDir, pageSize, segmentFilter]);
 
   const totalPages = Math.ceil(filtered.length / pageSize);
   const pageRows = useMemo(
