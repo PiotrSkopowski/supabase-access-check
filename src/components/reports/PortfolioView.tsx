@@ -40,17 +40,24 @@ export interface ClientPortfolioRow {
 
 type SortKey = "client_name" | "total_revenue" | "order_count" | "rotation_index" | "segment";
 type SortDir = "asc" | "desc";
+type SegmentFilter = "all" | "A" | "B" | "C";
 
 const formatCurrency = (v: number) =>
   v.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
-function getSegment(revenue: number, thresholds: { a: number; b: number }): "A" | "B" | "C" {
-  if (revenue >= thresholds.a) return "A";
-  if (revenue >= thresholds.b) return "B";
+function getSegment(revenue: number, orderCount: number): "A" | "B" | "C" {
+  if (revenue >= 10000 || orderCount >= 5) return "A";
+  if ((revenue >= 2000 && revenue < 10000) || (orderCount >= 2 && orderCount <= 4)) return "B";
   return "C";
 }
+
+const SEGMENT_DESCRIPTIONS: Record<"A" | "B" | "C", string> = {
+  A: "Segment A: Kluczowi klienci (Wysoki obrót lub bardzo częste zamówienia).",
+  B: "Segment B: Klienci stabilni (Średni obrót, regularne zamówienia).",
+  C: "Segment C: Klienci jednorazowi lub z niskim obrotem.",
+};
 
 const segmentColors: Record<string, string> = {
   A: "bg-primary text-primary-foreground",
