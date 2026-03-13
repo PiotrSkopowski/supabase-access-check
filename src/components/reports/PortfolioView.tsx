@@ -136,18 +136,7 @@ const PortfolioView = ({
       }
     }
 
-    // Calculate ABC thresholds (Pareto: top 20% = A, next 30% = B, rest = C)
-    const revenues = Array.from(map.values()).map((d) => d.revenue).sort((a, b) => b - a);
-    const totalRevenue = revenues.reduce((a, b) => a + b, 0);
-    let cumulative = 0;
-    let thresholdA = 0;
-    let thresholdB = 0;
-    for (let i = 0; i < revenues.length; i++) {
-      cumulative += revenues[i];
-      if (!thresholdA && cumulative >= totalRevenue * 0.8) thresholdA = revenues[i];
-      if (!thresholdB && cumulative >= totalRevenue * 0.95) { thresholdB = revenues[i]; break; }
-    }
-
+    // Calculate rotation index per client
     return Array.from(map.entries()).map(([name, d]) => {
       const sortedDates = d.dates.sort();
       let avgInterval = 0;
