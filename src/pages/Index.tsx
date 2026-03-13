@@ -647,14 +647,16 @@ const Index = () => {
                   </TableHead>
                 )}
                 {/* Nowa kolumna Status */}
-                <TableHead
-                  className="font-semibold min-w-[120px] cursor-pointer select-none"
-                  onClick={() => handleSort("status")}
-                >
-                  <span className="inline-flex items-center">
-                    Status <SortIcon column="status" />
-                  </span>
-                </TableHead>
+                {show("status") && (
+                  <TableHead
+                    className="font-semibold min-w-[120px] cursor-pointer select-none"
+                    onClick={() => handleSort("status")}
+                  >
+                    <span className="inline-flex items-center">
+                      Status <SortIcon column="status" />
+                    </span>
+                  </TableHead>
+                )}
                 {show("order_date") && (
                   <TableHead
                     className="font-semibold cursor-pointer select-none"
