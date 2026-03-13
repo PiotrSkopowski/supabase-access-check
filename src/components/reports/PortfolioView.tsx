@@ -156,7 +156,7 @@ const PortfolioView = ({
         last_order_date: d.lastDate,
         avg_order_value: d.count > 0 ? d.revenue / d.count : 0,
         rotation_index: avgInterval,
-        segment: getSegment(d.revenue, { a: thresholdA, b: thresholdB }),
+        segment: getSegment(d.revenue, d.count),
       };
     });
   }, [filteredOrders]);
