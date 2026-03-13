@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { format, subMonths, differenceInDays, isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import { pl } from "date-fns/locale";
 import {
-  CalendarIcon, Download, FileText, FileSpreadsheet, Users,
+  Download, FileText, FileSpreadsheet, Users,
   ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
   ChevronsLeft, ChevronsRight, BarChart3, GitCompare, Filter, Info,
 } from "lucide-react";
