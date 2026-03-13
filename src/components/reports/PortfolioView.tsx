@@ -175,6 +175,10 @@ const PortfolioView = ({
     const q = search.toLowerCase().trim();
     let list = q ? clients.filter((c) => c.client_name.toLowerCase().includes(q)) : clients;
 
+    if (segmentFilter !== "all") {
+      list = list.filter((c) => c.segment === segmentFilter);
+    }
+
     list = [...list].sort((a, b) => {
       let cmp = 0;
       switch (sortKey) {
@@ -187,7 +191,7 @@ const PortfolioView = ({
       return sortDir === "asc" ? cmp : -cmp;
     });
     return list;
-  }, [clients, search, sortKey, sortDir]);
+  }, [clients, search, sortKey, sortDir, segmentFilter]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
