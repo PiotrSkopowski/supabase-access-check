@@ -1,11 +1,17 @@
-import { Search, X, SlidersHorizontal } from "lucide-react";
+import { Search, X, SlidersHorizontal, CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { pl } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ComboboxFilter } from "@/components/ComboboxFilter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+import type { DateRange } from "react-day-picker";
 
 export interface FilterState {
   search: string;
@@ -35,6 +41,8 @@ interface OrderFiltersProps {
   pageSizeOptions: readonly number[];
   hiddenColumns: Set<ToggleableColumn>;
   onToggleColumn: (col: ToggleableColumn) => void;
+  dateRange?: DateRange;
+  onDateRangeChange?: (range: DateRange | undefined) => void;
 }
 
 export const EMPTY_FILTERS: FilterState = {
@@ -44,8 +52,14 @@ export const EMPTY_FILTERS: FilterState = {
   groupName: "",
 };
 
-export function OrderFilters({ filters, onChange, clients, products, groups, pageSize, onPageSizeChange, pageSizeOptions, hiddenColumns, onToggleColumn }: OrderFiltersProps) {
-  const hasAny = filters.search || filters.clientName || filters.productName || filters.groupName;
+export function OrderFilters({ filters, onChange, clients, products, groups, pageSize, onPageSizeChange, pageSizeOptions, hiddenColumns, onToggleColumn, dateRange, onDateRangeChange }: OrderFiltersProps) {
+  const hasAny = filters.search || filters.clientName || filters.productName || filters.groupName || dateRange?.from;
+
+  const dateRangeLabel = dateRange?.from && dateRange?.to
+    ? `${format(dateRange.from, "dd MMM yyyy", { locale: pl })} – ${format(dateRange.to, "dd MMM yyyy", { locale: pl })}`
+    : dateRange?.from
+      ? `Od ${format(dateRange.from, "dd MMM yyyy", { locale: pl })}`
+      : "Cały okres";
 
   return (
     <div className="space-y-3">
@@ -63,15 +77,45 @@ export function OrderFilters({ filters, onChange, clients, products, groups, pag
             variant="ghost"
             size="icon"
             className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
-            onClick={() => onChange(EMPTY_FILTERS)}
+            onClick={() => {
+              onChange(EMPTY_FILTERS);
+              onDateRangeChange?.(undefined);
+            }}
           >
             <X className="h-4 w-4" />
           </Button>
         )}
       </div>
 
-      {/* Row 2: Combobox filters + column toggle + page size */}
+      {/* Row 2: Date range + Combobox filters + column toggle + page size */}
       <div className="flex flex-wrap gap-3 items-center">
+        {onDateRangeChange && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className={cn("h-10 rounded-md text-sm justify-start min-w-[240px]", !dateRange?.from && "text-muted-foreground")}>
+                <CalendarIcon className="h-4 w-4 mr-2" />
+                {dateRangeLabel}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="range"
+                selected={dateRange}
+                onSelect={onDateRangeChange}
+                numberOfMonths={2}
+                locale={pl}
+                className="p-3 pointer-events-auto"
+              />
+              {dateRange?.from && (
+                <div className="border-t px-3 py-2">
+                  <Button variant="ghost" size="sm" className="text-xs" onClick={() => onDateRangeChange(undefined)}>
+                    Wyczyść daty
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+        )}
         <ComboboxFilter
           value={filters.clientName}
           onChange={(v) => onChange({ ...filters, clientName: v })}
