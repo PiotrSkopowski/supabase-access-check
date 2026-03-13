@@ -84,8 +84,35 @@ export function OrderFilters({ filters, onChange, clients, products, groups, pag
         )}
       </div>
 
-      {/* Row 2: Combobox filters + column toggle + page size */}
+      {/* Row 2: Date range + Combobox filters + column toggle + page size */}
       <div className="flex flex-wrap gap-3 items-center">
+        {onDateRangeChange && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className={cn("h-10 rounded-md text-sm justify-start min-w-[240px]", !dateRange?.from && "text-muted-foreground")}>
+                <CalendarIcon className="h-4 w-4 mr-2" />
+                {dateRangeLabel}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="range"
+                selected={dateRange}
+                onSelect={onDateRangeChange}
+                numberOfMonths={2}
+                locale={pl}
+                className="p-3 pointer-events-auto"
+              />
+              {dateRange?.from && (
+                <div className="border-t px-3 py-2">
+                  <Button variant="ghost" size="sm" className="text-xs" onClick={() => onDateRangeChange(undefined)}>
+                    Wyczyść daty
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+        )}
         <ComboboxFilter
           value={filters.clientName}
           onChange={(v) => onChange({ ...filters, clientName: v })}
