@@ -613,6 +613,13 @@ const PortfolioView = ({
           </PopoverContent>
         </Popover>
 
+        {/* Status Filter */}
+        <StatusFilter
+          availableStatuses={availableStatuses}
+          selectedStatuses={selectedStatuses}
+          onChange={setSelectedStatuses}
+        />
+
         <span className="text-sm text-muted-foreground ml-auto">{filtered.length} klientów</span>
 
         {selected.size >= 2 && (
