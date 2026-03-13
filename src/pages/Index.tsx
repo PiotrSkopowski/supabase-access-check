@@ -373,7 +373,7 @@ const Index = () => {
       }
       return true;
     });
-  }, [allRows, filters]);
+  }, [allRows, filters, dateRange]);
 
   const sortedRows = useMemo(() => {
     if (!sortKey) return filteredRows;
