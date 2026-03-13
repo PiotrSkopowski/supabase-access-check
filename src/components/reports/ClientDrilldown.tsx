@@ -1,11 +1,14 @@
-import { useMemo } from "react";
-import { format, differenceInDays, addDays, isWithinInterval, startOfDay, endOfDay, subMonths } from "date-fns";
+import { useState, useMemo } from "react";
+import { format, differenceInDays, isWithinInterval, startOfDay, endOfDay, subMonths, eachMonthOfInterval, startOfMonth, endOfMonth } from "date-fns";
 import { pl } from "date-fns/locale";
 import {
   ArrowLeft, TrendingUp, TrendingDown, AlertTriangle, ExternalLink,
-  DollarSign, Package, BarChart3, Clock, Download, FileText, FileSpreadsheet,
+  DollarSign, Package, BarChart3, Clock, Download, FileText, FileSpreadsheet, CalendarIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -51,9 +54,9 @@ interface ClientDrilldownProps {
   onBack: () => void;
 }
 
-const ClientDrilldown = ({ clientName, orders: rawOrders, dateRange, onBack }: ClientDrilldownProps) => {
+const ClientDrilldown = ({ clientName, orders: rawOrders, dateRange: initialDateRange, onBack }: ClientDrilldownProps) => {
   const orders = rawOrders ?? [];
-
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(initialDateRange);
   const productIdMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const o of orders) {
@@ -80,8 +83,9 @@ const ClientDrilldown = ({ clientName, orders: rawOrders, dateRange, onBack }: C
 
   /* ── Monthly Trendline ── */
   const trendData = useMemo(() => {
+    // Build month map from filtered orders
     const monthMap = new Map<string, { revenue: number; count: number }>();
-    for (const o of clientOrders) {
+    for (const o of filteredOrders) {
       if (!o.order_date) continue;
       const d = new Date(o.order_date);
       const key = format(d, "yyyy-MM");
@@ -92,10 +96,38 @@ const ClientDrilldown = ({ clientName, orders: rawOrders, dateRange, onBack }: C
       existing.count += 1;
       monthMap.set(key, existing);
     }
-    return Array.from(monthMap.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([month, d]) => ({ month: format(new Date(month + "-01"), "MMM yy", { locale: pl }), revenue: d.revenue, orders: d.count }));
-  }, [clientOrders]);
+
+    // Determine range for zero-filling
+    let rangeFrom: Date;
+    let rangeTo: Date;
+    if (dateRange?.from && dateRange?.to) {
+      rangeFrom = dateRange.from;
+      rangeTo = dateRange.to;
+    } else if (dateRange?.from) {
+      rangeFrom = dateRange.from;
+      rangeTo = new Date();
+    } else {
+      // Use full client history range
+      const allDates = filteredOrders
+        .filter((o) => o.order_date)
+        .map((o) => new Date(o.order_date));
+      if (allDates.length === 0) return [];
+      rangeFrom = new Date(Math.min(...allDates.map((d) => d.getTime())));
+      rangeTo = new Date(Math.max(...allDates.map((d) => d.getTime())));
+    }
+
+    // Generate continuous months
+    const months = eachMonthOfInterval({ start: startOfMonth(rangeFrom), end: endOfMonth(rangeTo) });
+    return months.map((m) => {
+      const key = format(m, "yyyy-MM");
+      const data = monthMap.get(key) || { revenue: 0, count: 0 };
+      return {
+        month: format(m, "MMM yy", { locale: pl }),
+        revenue: data.revenue,
+        orders: data.count,
+      };
+    });
+  }, [filteredOrders, dateRange]);
 
   /* ── Alert: >20% drop ── */
   const trendAlert = useMemo(() => {
@@ -202,17 +234,52 @@ const ClientDrilldown = ({ clientName, orders: rawOrders, dateRange, onBack }: C
     );
   };
 
+  const dateRangeLabel = dateRange?.from && dateRange?.to
+    ? `${format(dateRange.from, "dd MMM yyyy", { locale: pl })} – ${format(dateRange.to, "dd MMM yyyy", { locale: pl })}`
+    : dateRange?.from
+      ? `Od ${format(dateRange.from, "dd MMM yyyy", { locale: pl })}`
+      : "Cały okres";
+
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="flex items-center gap-4 print:hidden">
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
         <Button variant="ghost" size="sm" onClick={onBack} className="gap-1.5">
           <ArrowLeft className="h-4 w-4" /> Powrót
         </Button>
-        <h2 className="text-xl font-bold text-foreground flex-1">{clientName}</h2>
+        <h2 className="text-xl font-bold text-foreground">{clientName}</h2>
+        <div className="flex-1" />
+
+        {/* DateRangePicker */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className={cn("h-10 rounded-md text-sm justify-start min-w-[240px]", !dateRange?.from && "text-muted-foreground")}>
+              <CalendarIcon className="h-4 w-4 mr-2" />
+              {dateRangeLabel}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <Calendar
+              mode="range"
+              selected={dateRange}
+              onSelect={setDateRange}
+              numberOfMonths={2}
+              locale={pl}
+              className="p-3 pointer-events-auto"
+            />
+            {dateRange?.from && (
+              <div className="border-t px-3 py-2">
+                <Button variant="ghost" size="sm" className="text-xs" onClick={() => setDateRange(undefined)}>
+                  Wyczyść daty
+                </Button>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5">
+            <Button variant="outline" size="sm" className="h-10 rounded-md gap-1.5">
               <Download className="h-4 w-4" /> Eksportuj
             </Button>
           </DropdownMenuTrigger>
