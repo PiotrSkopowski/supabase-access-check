@@ -366,9 +366,12 @@ const Index = () => {
 
   const filteredRows = useMemo(() => {
     const s = filters.search.toLowerCase();
+    const statusSet = new Set(filters.statuses);
     return allRows.filter((r) => {
       // Jeśli cena (price) wynosi 0, jest pusta (null) lub niezdefiniowana (undefined) - nie pokazuj tego wiersza
       if (!r.price || r.price === 0) return false;
+      // Status filter
+      if (statusSet.size > 0 && !statusSet.has(r.status || "")) return false;
       // Date range filter
       if (dateRange?.from && r.order_date) {
         const d = new Date(r.order_date);
