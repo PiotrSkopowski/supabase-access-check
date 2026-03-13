@@ -348,6 +348,22 @@ const Index = () => {
     };
   }, [allRows, filters]);
 
+  // Extract unique statuses from all rows
+  const availableStatuses = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of allRows) {
+      set.add(r.status || "");
+    }
+    return Array.from(set).sort();
+  }, [allRows]);
+
+  // Initialize statuses filter when availableStatuses changes
+  useEffect(() => {
+    if (availableStatuses.length > 0 && filters.statuses.length === 0) {
+      setFilters((prev) => ({ ...prev, statuses: [...availableStatuses] }));
+    }
+  }, [availableStatuses]);
+
   const filteredRows = useMemo(() => {
     const s = filters.search.toLowerCase();
     return allRows.filter((r) => {
