@@ -1,16 +1,20 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
-import { format, subMonths, differenceInDays, isWithinInterval, startOfDay, endOfDay } from "date-fns";
+import { useState, useMemo, useEffect } from "react";
+import { format, differenceInDays, isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import { pl } from "date-fns/locale";
 import {
   Download, FileText, FileSpreadsheet, Users,
   ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
-  ChevronsLeft, ChevronsRight, BarChart3, GitCompare, Filter, Info,
+  ChevronsLeft, ChevronsRight, BarChart3, GitCompare, Info,
+  CalendarIcon, Search, Settings, Check,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -20,10 +24,16 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { ComboboxFilter } from "@/components/ComboboxFilter";
 import type { DateRange } from "react-day-picker";
 import * as XLSX from "xlsx";
+
+/* ── Forbidden names ── */
+const FORBIDDEN_NAMES = ["fly4u", "sky rocket", "test", "toptech"];
 
 /* ── Types ── */
 export interface ClientPortfolioRow {
@@ -33,7 +43,7 @@ export interface ClientPortfolioRow {
   unique_products: number;
   last_order_date: string | null;
   avg_order_value: number;
-  rotation_index: number; // avg days between orders
+  rotation_index: number;
   segment: "A" | "B" | "C";
 }
 
@@ -41,22 +51,30 @@ type SortKey = "client_name" | "total_revenue" | "order_count" | "rotation_index
 type SortDir = "asc" | "desc";
 type SegmentFilter = "all" | "A" | "B" | "C";
 
+interface SegmentThresholds {
+  aMinRevenue: number;
+  aMinOrders: number;
+  bMinRevenue: number;
+  bMinOrders: number;
+}
+
+const DEFAULT_THRESHOLDS: SegmentThresholds = {
+  aMinRevenue: 10000,
+  aMinOrders: 5,
+  bMinRevenue: 2000,
+  bMinOrders: 2,
+};
+
 const formatCurrency = (v: number) =>
   v.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
-function getSegment(revenue: number, orderCount: number): "A" | "B" | "C" {
-  if (revenue >= 10000 || orderCount >= 5) return "A";
-  if ((revenue >= 2000 && revenue < 10000) || (orderCount >= 2 && orderCount <= 4)) return "B";
+function getSegment(revenue: number, orderCount: number, t: SegmentThresholds): "A" | "B" | "C" {
+  if (revenue >= t.aMinRevenue || orderCount >= t.aMinOrders) return "A";
+  if (revenue >= t.bMinRevenue || orderCount >= t.bMinOrders) return "B";
   return "C";
 }
-
-const SEGMENT_DESCRIPTIONS: Record<"A" | "B" | "C", string> = {
-  A: "Segment A: Kluczowi klienci (Wysoki obrót lub bardzo częste zamówienia).",
-  B: "Segment B: Klienci stabilni (Średni obrót, regularne zamówienia).",
-  C: "Segment C: Klienci jednorazowi lub z niskim obrotem.",
-};
 
 const segmentColors: Record<string, string> = {
   A: "bg-primary text-primary-foreground",
@@ -80,16 +98,22 @@ const PortfolioView = ({
   onCompare,
 }: PortfolioViewProps) => {
   const orders = rawOrders ?? [];
-  const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("total_revenue");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [segmentFilter, setSegmentFilter] = useState<SegmentFilter>("all");
-  /* ── Filter by date ── */
+  const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
+  const [clientSearch, setClientSearch] = useState("");
+  const [thresholds, setThresholds] = useState<SegmentThresholds>(DEFAULT_THRESHOLDS);
+  const [tempThresholds, setTempThresholds] = useState<SegmentThresholds>(DEFAULT_THRESHOLDS);
+
+  /* ── Filter by date, exclude forbidden ── */
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
+      const name = (o.client_name ?? "").trim().toLowerCase();
+      if (FORBIDDEN_NAMES.some((f) => name === f)) return false;
       if (dateRange?.from && dateRange?.to && o.order_date) {
         const d = new Date(o.order_date);
         if (!isWithinInterval(d, { start: startOfDay(dateRange.from), end: endOfDay(dateRange.to) })) return false;
@@ -97,16 +121,6 @@ const PortfolioView = ({
       return true;
     });
   }, [orders, dateRange]);
-
-  /* ── Unique client names for search ── */
-  const clientNames = useMemo(() => {
-    const set = new Set<string>();
-    for (const o of filteredOrders) {
-      const n = (o.client_name ?? "").trim();
-      if (n) set.add(n);
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "pl"));
-  }, [filteredOrders]);
 
   /* ── Aggregate clients ── */
   const clients = useMemo<ClientPortfolioRow[]>(() => {
@@ -135,7 +149,6 @@ const PortfolioView = ({
       }
     }
 
-    // Calculate rotation index per client
     return Array.from(map.entries()).map(([name, d]) => {
       const sortedDates = d.dates.sort();
       let avgInterval = 0;
@@ -155,27 +168,38 @@ const PortfolioView = ({
         last_order_date: d.lastDate,
         avg_order_value: d.count > 0 ? d.revenue / d.count : 0,
         rotation_index: avgInterval,
-        segment: getSegment(d.revenue, d.count),
+        segment: getSegment(d.revenue, d.count, thresholds),
       };
     });
-  }, [filteredOrders]);
+  }, [filteredOrders, thresholds]);
 
-  /* ── KPIs ── */
-  const kpis = useMemo(() => {
-    const totalRev = clients.reduce((s, c) => s + c.total_revenue, 0);
-    const segA = clients.filter((c) => c.segment === "A").length;
-    const segB = clients.filter((c) => c.segment === "B").length;
-    const segC = clients.filter((c) => c.segment === "C").length;
-    return { totalClients: clients.length, totalRev, segA, segB, segC };
-  }, [clients]);
+  /* ── Clients filtered by segment (for client filter list) ── */
+  const clientsForFilter = useMemo(() => {
+    if (segmentFilter === "all") return clients;
+    return clients.filter((c) => c.segment === segmentFilter);
+  }, [clients, segmentFilter]);
+
+  const clientNamesForFilter = useMemo(() =>
+    clientsForFilter.map((c) => c.client_name).sort((a, b) => a.localeCompare(b, "pl")),
+    [clientsForFilter]
+  );
+
+  const visibleClientNames = useMemo(() => {
+    const q = clientSearch.toLowerCase().trim();
+    if (!q) return clientNamesForFilter;
+    return clientNamesForFilter.filter((n) => n.toLowerCase().includes(q));
+  }, [clientNamesForFilter, clientSearch]);
 
   /* ── Filter + Sort ── */
   const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    let list = q ? clients.filter((c) => c.client_name.toLowerCase().includes(q)) : clients;
+    let list = clients;
 
     if (segmentFilter !== "all") {
       list = list.filter((c) => c.segment === segmentFilter);
+    }
+
+    if (selectedClients.size > 0) {
+      list = list.filter((c) => selectedClients.has(c.client_name));
     }
 
     list = [...list].sort((a, b) => {
@@ -190,14 +214,29 @@ const PortfolioView = ({
       return sortDir === "asc" ? cmp : -cmp;
     });
     return list;
-  }, [clients, search, sortKey, sortDir, segmentFilter]);
+  }, [clients, sortKey, sortDir, segmentFilter, selectedClients]);
+
+  /* ── KPIs based on filtered data ── */
+  const kpis = useMemo(() => {
+    const totalRev = filtered.reduce((s, c) => s + c.total_revenue, 0);
+    const segA = filtered.filter((c) => c.segment === "A");
+    const segB = filtered.filter((c) => c.segment === "B");
+    const segC = filtered.filter((c) => c.segment === "C");
+    return {
+      totalClients: filtered.length,
+      totalRev,
+      segA: { count: segA.length, revenue: segA.reduce((s, c) => s + c.total_revenue, 0) },
+      segB: { count: segB.length, revenue: segB.reduce((s, c) => s + c.total_revenue, 0) },
+      segC: { count: segC.length, revenue: segC.reduce((s, c) => s + c.total_revenue, 0) },
+    };
+  }, [filtered]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("desc"); }
   };
 
-  useEffect(() => { setPage(0); }, [search, sortKey, sortDir, pageSize, segmentFilter]);
+  useEffect(() => { setPage(0); }, [sortKey, sortDir, pageSize, segmentFilter, selectedClients, dateRange]);
 
   const totalPages = Math.ceil(filtered.length / pageSize);
   const pageRows = useMemo(
@@ -210,6 +249,15 @@ const PortfolioView = ({
       const next = new Set(prev);
       if (next.has(name)) next.delete(name);
       else if (next.size < 3) next.add(name);
+      return next;
+    });
+  };
+
+  const toggleClientFilter = (name: string) => {
+    setSelectedClients((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
       return next;
     });
   };
@@ -240,10 +288,17 @@ const PortfolioView = ({
 
   const dateRangeLabel = dateRange?.from && dateRange?.to
     ? `${format(dateRange.from, "dd MMM yyyy", { locale: pl })} – ${format(dateRange.to, "dd MMM yyyy", { locale: pl })}`
-    : "Cały okres";
+    : dateRange?.from
+      ? `Od ${format(dateRange.from, "dd MMM yyyy", { locale: pl })}`
+      : "Cały okres";
+
+  const segmentDescription = segmentFilter === "all" ? null
+    : segmentFilter === "A" ? `Segment A: Obrót ≥ ${formatCurrency(thresholds.aMinRevenue)} PLN lub min. ${thresholds.aMinOrders} zamówień.`
+    : segmentFilter === "B" ? `Segment B: Obrót ≥ ${formatCurrency(thresholds.bMinRevenue)} PLN lub min. ${thresholds.bMinOrders} zamówień.`
+    : "Segment C: Pozostali klienci poniżej progów Segmentu B.";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Print header */}
       <div className="hidden print:block print:mb-6">
         <h1 className="text-2xl font-bold">Toptech Polska — Portfel Klientów</h1>
@@ -251,62 +306,176 @@ const PortfolioView = ({
       </div>
 
       {/* ── Filters ── */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center print:hidden flex-wrap">
-        <div className="flex items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-sm text-muted-foreground">Data od</label>
-            <Input
-              type="date"
-              className="w-[180px]"
-              value={dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : ""}
-              onChange={(e) => {
-                const val = e.target.value;
-                onDateRangeChange(val ? { from: new Date(val), to: dateRange?.to } : { from: undefined, to: dateRange?.to });
-              }}
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
+        {/* Date Range Picker */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className={cn("h-10 rounded-md text-sm justify-start min-w-[240px]", !dateRange?.from && "text-muted-foreground")}>
+              <CalendarIcon className="h-4 w-4 mr-2" />
+              {dateRangeLabel}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="range"
+              selected={dateRange}
+              onSelect={onDateRangeChange}
+              numberOfMonths={2}
+              locale={pl}
+              className="p-3 pointer-events-auto"
             />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm text-muted-foreground">Data do</label>
-            <Input
-              type="date"
-              className="w-[180px]"
-              value={dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : ""}
-              onChange={(e) => {
-                const val = e.target.value;
-                onDateRangeChange(val ? { from: dateRange?.from, to: new Date(val) } : { from: dateRange?.from, to: undefined });
-              }}
-            />
-          </div>
-        </div>
+            {dateRange?.from && (
+              <div className="border-t px-3 py-2">
+                <Button variant="ghost" size="sm" className="text-xs" onClick={() => onDateRangeChange(undefined)}>
+                  Wyczyść daty
+                </Button>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
 
-        <ComboboxFilter
-          value={search}
-          onChange={setSearch}
-          options={clientNames}
-          placeholder="Szukaj klienta…"
-          emptyText="Nie znaleziono"
-          className="w-full sm:w-[280px]"
-        />
-
-        <Select value={segmentFilter} onValueChange={(v) => setSegmentFilter(v as SegmentFilter)}>
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              <SelectValue placeholder="Segment" />
+        {/* Client Multi-Select */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="h-10 rounded-md text-sm gap-2">
+              <Search className="h-4 w-4" />
+              Klient
+              {selectedClients.size > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">{selectedClients.size}</Badge>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72 p-0" align="start">
+            <div className="p-2 border-b">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Szukaj klienta…"
+                  value={clientSearch}
+                  onChange={(e) => setClientSearch(e.target.value)}
+                  className="pl-8 h-9 text-sm"
+                />
+              </div>
             </div>
+            <div className="flex items-center gap-1 px-2 py-1.5 border-b">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setSelectedClients(new Set(visibleClientNames))}
+              >
+                Zaznacz widoczne
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => {
+                  setSelectedClients((prev) => {
+                    const next = new Set(prev);
+                    visibleClientNames.forEach((n) => next.delete(n));
+                    return next;
+                  });
+                }}
+              >
+                Odznacz widoczne
+              </Button>
+            </div>
+            <ScrollArea className="max-h-64">
+              {visibleClientNames.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">Brak wyników</p>
+              ) : (
+                visibleClientNames.map((name) => (
+                  <button
+                    key={name}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
+                    onClick={() => toggleClientFilter(name)}
+                  >
+                    <Checkbox checked={selectedClients.has(name)} className="pointer-events-none" />
+                    <span className="truncate">{name}</span>
+                  </button>
+                ))
+              )}
+            </ScrollArea>
+            {selectedClients.size > 0 && (
+              <div className="border-t px-2 py-1.5">
+                <Button variant="ghost" size="sm" className="h-7 text-xs w-full" onClick={() => setSelectedClients(new Set())}>
+                  Wyczyść wszystkie ({selectedClients.size})
+                </Button>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+
+        {/* Segment Filter */}
+        <Select value={segmentFilter} onValueChange={(v) => setSegmentFilter(v as SegmentFilter)}>
+          <SelectTrigger className="h-10 rounded-md text-sm w-[170px]">
+            <SelectValue placeholder="Segment" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Wszystkie segmenty</SelectItem>
+            <SelectItem value="all">Wszyscy</SelectItem>
             <SelectItem value="A">Segment A</SelectItem>
             <SelectItem value="B">Segment B</SelectItem>
             <SelectItem value="C">Segment C</SelectItem>
           </SelectContent>
         </Select>
 
+        {/* Segmentation Settings */}
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 rounded-md"
+              onClick={() => setTempThresholds(thresholds)}
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>⚙️ Ustawienia Segmentacji</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-5 pt-2">
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-foreground">Segment A (Kluczowi)</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Min. obrót (PLN)</Label>
+                    <Input type="number" value={tempThresholds.aMinRevenue} onChange={(e) => setTempThresholds((p) => ({ ...p, aMinRevenue: Number(e.target.value) }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Min. zamówień</Label>
+                    <Input type="number" value={tempThresholds.aMinOrders} onChange={(e) => setTempThresholds((p) => ({ ...p, aMinOrders: Number(e.target.value) }))} />
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-foreground">Segment B (Stabilni)</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Min. obrót (PLN)</Label>
+                    <Input type="number" value={tempThresholds.bMinRevenue} onChange={(e) => setTempThresholds((p) => ({ ...p, bMinRevenue: Number(e.target.value) }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Min. zamówień</Label>
+                    <Input type="number" value={tempThresholds.bMinOrders} onChange={(e) => setTempThresholds((p) => ({ ...p, bMinOrders: Number(e.target.value) }))} />
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Segment C: Wszyscy poniżej progów Segmentu B.</p>
+              <Button className="w-full" onClick={() => setThresholds(tempThresholds)}>
+                <Check className="h-4 w-4 mr-2" />
+                Zastosuj progi
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <span className="text-sm text-muted-foreground ml-auto">{filtered.length} klientów</span>
 
         {selected.size >= 2 && (
-          <Button variant="default" size="sm" className="gap-1.5" onClick={() => onCompare(Array.from(selected))}>
+          <Button variant="default" size="sm" className="gap-1.5 h-10" onClick={() => onCompare(Array.from(selected))}>
             <GitCompare className="h-4 w-4" />
             Porównaj ({selected.size})
           </Button>
@@ -314,7 +483,7 @@ const PortfolioView = ({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5">
+            <Button variant="outline" size="sm" className="gap-1.5 h-10">
               <Download className="h-4 w-4" />
               Eksportuj
             </Button>
@@ -331,34 +500,61 @@ const PortfolioView = ({
       </div>
 
       {/* ── Segment Info Bar ── */}
-      {segmentFilter !== "all" && (
+      {segmentDescription && (
         <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-4 py-2.5 text-sm text-muted-foreground print:hidden">
           <Info className="h-4 w-4 shrink-0 text-primary" />
-          {SEGMENT_DESCRIPTIONS[segmentFilter]}
+          {segmentDescription}
         </div>
       )}
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2"><Users className="h-4 w-4 text-primary" /> Klienci</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-bold text-foreground">{kpis.totalClients}</p></CardContent>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" /> Klienci
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-foreground">{kpis.totalClients}</p>
+          </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /> Obrót</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-bold text-foreground">{formatCurrency(kpis.totalRev)} PLN</p></CardContent>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-primary" /> Obrót
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-foreground">{formatCurrency(kpis.totalRev)} PLN</p>
+          </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Segment A</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-bold text-foreground">{kpis.segA}</p><p className="text-xs text-muted-foreground">kluczowi klienci</p></CardContent>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Segment A</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-foreground">{kpis.segA.count}</p>
+            <p className="text-xs text-muted-foreground">{formatCurrency(kpis.segA.revenue)} PLN</p>
+          </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Segment B</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-bold text-foreground">{kpis.segB}</p><p className="text-xs text-muted-foreground">średni potencjał</p></CardContent>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Segment B</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-foreground">{kpis.segB.count}</p>
+            <p className="text-xs text-muted-foreground">{formatCurrency(kpis.segB.revenue)} PLN</p>
+          </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Segment C</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-bold text-foreground">{kpis.segC}</p><p className="text-xs text-muted-foreground">okazjonalni</p></CardContent>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Segment C</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-foreground">{kpis.segC.count}</p>
+            <p className="text-xs text-muted-foreground">{formatCurrency(kpis.segC.revenue)} PLN</p>
+          </CardContent>
         </Card>
       </div>
 
