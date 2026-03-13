@@ -57,6 +57,7 @@ interface OrderRow {
   group_name?: string | null;
   product_id?: string | null;
   status?: string | null;
+  description?: string | null;
 }
 
 interface ResultRow extends OrderRow {
