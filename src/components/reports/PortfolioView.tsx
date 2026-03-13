@@ -213,10 +213,14 @@ const PortfolioView = ({
     return result;
   }, [ltmOrders, thresholds]);
 
-  /* ── Filter by user-selected date range (for display) ── */
+  /* ── Filter by user-selected date range AND status (for display) ── */
   const filteredOrders = useMemo(() => {
-    if (!dateRange?.from && !dateRange?.to) return cleanOrders;
+    const statusSet = new Set(selectedStatuses);
     return cleanOrders.filter((o) => {
+      // Status filter — filter BEFORE aggregation
+      if (statusSet.size > 0 && !statusSet.has(o.status || "")) return false;
+      // Date range filter
+      if (!dateRange?.from && !dateRange?.to) return true;
       if (!o.order_date) return true;
       if (dateRange.from && dateRange.to) {
         const d = new Date(o.order_date);
@@ -224,7 +228,7 @@ const PortfolioView = ({
       }
       return true;
     });
-  }, [cleanOrders, dateRange]);
+  }, [cleanOrders, dateRange, selectedStatuses]);
 
   /* ── Aggregate clients from filtered orders, segment from LTM ── */
   const clients = useMemo<ClientPortfolioRow[]>(() => {
