@@ -41,6 +41,8 @@ interface OrderFiltersProps {
   pageSizeOptions: readonly number[];
   hiddenColumns: Set<ToggleableColumn>;
   onToggleColumn: (col: ToggleableColumn) => void;
+  dateRange?: DateRange;
+  onDateRangeChange?: (range: DateRange | undefined) => void;
 }
 
 export const EMPTY_FILTERS: FilterState = {
