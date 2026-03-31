@@ -128,78 +128,97 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
   const hasValue = value?.from || value?.to;
 
   return (
-    <div className={cn("flex items-end gap-2", className)}>
-      {/* Pole "Od" */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Od</Label>
+    <div className={cn("flex items-center gap-1.5", className)}>
+      {/* Pole Od */}
+      <div className="relative">
         <Input
           value={fromText}
           onChange={handleFromChange}
-          placeholder={PLACEHOLDER}
-          className={cn("h-9 w-[120px] text-sm", fromError && "border-destructive")}
+          placeholder="RRRR-MM-DD"
+          className={cn(
+            "h-10 w-[130px] text-sm font-mono pr-2",
+            fromError && "border-destructive focus-visible:ring-destructive"
+          )}
+          maxLength={10}
         />
         {fromError && (
-          <p className="text-[10px] text-destructive">Format: RRRR-MM-DD</p>
+          <span className="absolute top-full left-0 text-xs text-destructive whitespace-nowrap mt-0.5 z-10">
+            Format: RRRR-MM-DD
+          </span>
         )}
       </div>
 
-      <span className="text-muted-foreground pb-2">—</span>
+      <span className="text-muted-foreground text-sm select-none">—</span>
 
-      {/* Pole "Do" */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Do</Label>
+      {/* Pole Do */}
+      <div className="relative">
         <Input
           value={toText}
           onChange={handleToChange}
-          placeholder={PLACEHOLDER}
-          className={cn("h-9 w-[120px] text-sm", toError && "border-destructive")}
+          placeholder="RRRR-MM-DD"
+          className={cn(
+            "h-10 w-[130px] text-sm font-mono pr-2",
+            toError && "border-destructive focus-visible:ring-destructive"
+          )}
+          maxLength={10}
         />
         {toError && (
-          <p className="text-[10px] text-destructive">Format: RRRR-MM-DD</p>
+          <span className="absolute top-full left-0 text-xs text-destructive whitespace-nowrap mt-0.5 z-10">
+            Format: RRRR-MM-DD
+          </span>
         )}
       </div>
 
       {/* Przycisk kalendarza */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground invisible">_</Label>
-        <Popover open={open} onOpenChange={handleOpenChange}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="icon" className="h-9 w-9">
-              <CalendarIcon className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            {/* Skrót — Ostatnie 30 dni */}
-            <div className="flex items-center justify-between border-b px-3 py-2">
-              <Button variant="ghost" size="sm" className="text-xs" onClick={handleLast30}>
-                Ostatnie 30 dni
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                {pending?.from && !pending?.to
-                  ? "Wybierz datę końcową..."
-                  : "Wybierz zakres"}
-              </span>
-            </div>
-            <Calendar
-              mode="range"
-              selected={pending}
-              onSelect={handleCalendarSelect}
-              numberOfMonths={2}
-              locale={pl}
-              className="p-3 pointer-events-auto"
-            />
-          </PopoverContent>
-        </Popover>
-      </div>
-
-      {/* Przycisk czyszczenia */}
-      {hasValue && (
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground invisible">_</Label>
-          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleClear}>
-            <X className="h-4 w-4" />
+      <Popover open={open} onOpenChange={handleOpenChange}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-10 w-10 shrink-0"
+            title="Wybierz zakres z kalendarza"
+          >
+            <CalendarIcon className="h-4 w-4" />
           </Button>
-        </div>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <div className="border-b px-3 py-2 flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={handleLast30}
+            >
+              Ostatnie 30 dni
+            </Button>
+            <span className="text-xs text-muted-foreground ml-auto">
+              {pending?.from && !pending?.to
+                ? "Wybierz datę końcową..."
+                : "Wybierz zakres"}
+            </span>
+          </div>
+          <Calendar
+            mode="range"
+            selected={pending}
+            onSelect={handleCalendarSelect}
+            numberOfMonths={2}
+            locale={pl}
+            className="p-3"
+          />
+        </PopoverContent>
+      </Popover>
+
+      {/* Przycisk X — wyczyść */}
+      {hasValue && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 text-muted-foreground hover:text-foreground shrink-0"
+          onClick={handleClear}
+          title="Wyczyść zakres dat"
+        >
+          <X className="h-4 w-4" />
+        </Button>
       )}
     </div>
   );
