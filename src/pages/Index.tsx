@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { useOrderHistory, useProducts, useProductGroups, useSalesOpportunities } from "@/hooks/useOrdersData";
+import { useOrderHistory, useProducts, useProductGroups, useSalesOpportunities, type OrderFiltersParams } from "@/hooks/useOrdersData";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
