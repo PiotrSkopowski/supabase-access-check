@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { useQueryClient } from "@tanstack/react-query";
@@ -187,7 +187,7 @@ const Index = () => {
       }
     }
 
-    console.log("Pobrane dane order_history:", ordersData.slice(0, 5));
+    
 
     const joined: ResultRow[] = ordersData.map((o: any) => {
       const key = o.product_name?.trim().toLowerCase() || "";
@@ -357,9 +357,10 @@ const Index = () => {
     return Array.from(set).sort();
   }, [allRows]);
 
-  // Initialize statuses filter when availableStatuses changes
+  const statusesInitialized = useRef(false);
   useEffect(() => {
-    if (availableStatuses.length > 0 && filters.statuses.length === 0) {
+    if (!statusesInitialized.current && availableStatuses.length > 0) {
+      statusesInitialized.current = true;
       setFilters((prev) => ({ ...prev, statuses: [...availableStatuses] }));
     }
   }, [availableStatuses]);

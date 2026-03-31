@@ -9,7 +9,7 @@ export function useOrderHistory() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("order_history")
-        .select("*")
+        .select("product_id, client_id, client_name, product_name, product_group, product_group_name, currency, price, quantity, prodio_order_id, order_date, description, status")
         .order("order_date", { ascending: false });
       if (error) throw error;
       return data ?? [];
