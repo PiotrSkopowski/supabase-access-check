@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { subMonths } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,26 +15,45 @@ import type { DateRange } from "react-day-picker";
 
 type View = { type: "portfolio" } | { type: "drilldown"; client: string } | { type: "compare"; clients: string[] };
 
+const defaultRange: DateRange = {
+  from: subMonths(new Date(), 6),
+  to: new Date(),
+};
+
 const ReportsPage = () => {
   const queryClient = useQueryClient();
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subMonths(new Date(), 6),
-    to: new Date(),
-  });
+
+  // dateRange — stan UI kalendarza (zmienia się przy każdym kliknięciu)
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(defaultRange);
+
+  // appliedDateRange — stan zapytania do bazy (zmienia się TYLKO gdy zakres jest kompletny)
+  const [appliedDateRange, setAppliedDateRange] = useState<DateRange | undefined>(defaultRange);
+
+  const [view, setView] = useState<View>({ type: "portfolio" });
+
+  // Aktualizuj zapytanie tylko gdy obie daty są wybrane
+  const handleDateRangeChange = useCallback((range: DateRange | undefined) => {
+    setDateRange(range);
+    if (!range || (range.from && range.to)) {
+      setAppliedDateRange(range);
+    }
+    // Jeśli wybrano tylko from (range.to === undefined) — NIE aktualizuj zapytania
+    // Kalendarz czeka na wybranie drugiej daty
+  }, []);
 
   const reportFilters: OrderFiltersParams = {
-    dateFrom: dateRange?.from ? dateRange.from.toISOString().split("T")[0] : undefined,
-    dateTo: dateRange?.to
-      ? dateRange.to.toISOString().split("T")[0]
-      : dateRange?.from
-      ? dateRange.from.toISOString().split("T")[0]
+    dateFrom: appliedDateRange?.from
+      ? appliedDateRange.from.toISOString().split("T")[0]
+      : undefined,
+    dateTo: appliedDateRange?.to
+      ? appliedDateRange.to.toISOString().split("T")[0]
+      : appliedDateRange?.from
+      ? appliedDateRange.from.toISOString().split("T")[0]
       : undefined,
   };
 
   const { data: orders = [], isLoading: loadingOrders, isFetching: fetchingOrders } = useOrderHistory(reportFilters);
   const { data: opportunities = [], isLoading: loadingOpps } = useSalesOpportunities();
-
-  const loading = loadingOrders || loadingOpps;
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ["order_history"] });
@@ -42,10 +61,10 @@ const ReportsPage = () => {
     queryClient.refetchQueries({ queryKey: ["order_history", reportFilters] });
   };
 
-  
-  const [view, setView] = useState<View>({ type: "portfolio" });
+  // Szkielety tylko przy pierwszym ładowaniu — NIE przy zmianie filtrów
+  const initialLoading = (loadingOrders && orders.length === 0) || (loadingOpps && opportunities.length === 0);
 
-  if (loading) {
+  if (initialLoading) {
     return (
       <div className="space-y-6 p-6">
         <Skeleton className="h-8 w-64" />
@@ -88,7 +107,7 @@ const ReportsPage = () => {
             <PortfolioView
               orders={orders}
               dateRange={dateRange}
-              onDateRangeChange={setDateRange}
+              onDateRangeChange={handleDateRangeChange}
               onClientClick={(client) => setView({ type: "drilldown", client })}
               onCompare={(clients) => setView({ type: "compare", clients })}
             />
