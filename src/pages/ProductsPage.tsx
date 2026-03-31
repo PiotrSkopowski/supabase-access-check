@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useOrderHistory, useProducts, useSalesOpportunities } from "@/hooks/useOrdersData";
+import { useOrderHistory, useProducts, useSalesOpportunities, type OrderFiltersParams } from "@/hooks/useOrdersData";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
