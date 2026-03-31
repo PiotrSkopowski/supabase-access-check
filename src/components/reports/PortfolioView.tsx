@@ -6,8 +6,9 @@ import {
   Download, FileText, FileSpreadsheet, Users,
   ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
   ChevronsLeft, ChevronsRight, BarChart3, GitCompare, Info,
-  CalendarIcon, Search, Settings, Check,
+  Search, Settings, Check,
 } from "lucide-react";
+import { DateRangePicker } from "@/components/DateRangePicker";
 import { StatusFilter } from "@/components/StatusFilter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
