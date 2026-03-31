@@ -141,7 +141,17 @@ const Index = () => {
   const show = useCallback((col: ToggleableColumn) => !hiddenColumns.has(col), [hiddenColumns]);
 
   // React Query hooks for cached data fetching
-  const { data: ordersData, isLoading: loadingOrders, error: ordersError } = useOrderHistory();
+  const activeFilters: OrderFiltersParams = {
+    statuses: filters.statuses.length > 0 ? filters.statuses : undefined,
+    clientName: filters.clientName || undefined,
+    productName: filters.productName || undefined,
+    groupName: filters.groupName || undefined,
+    dateFrom: dateRange?.from ? dateRange.from.toISOString().split("T")[0] : undefined,
+    dateTo: dateRange?.to ? dateRange.to.toISOString().split("T")[0] : undefined,
+    search: filters.search || undefined,
+  };
+
+  const { data: ordersData, isLoading: loadingOrders, error: ordersError } = useOrderHistory(activeFilters);
   const { data: productsData = [], isLoading: loadingProducts } = useProducts(
     "name, current_price, group_id, sciezka_z",
   );
