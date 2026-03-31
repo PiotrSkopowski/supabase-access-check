@@ -441,7 +441,7 @@ const PortfolioView = ({
             />
             {dateRange?.from && (
               <div className="border-t px-3 py-2">
-                <Button variant="ghost" size="sm" className="text-xs" onClick={() => onDateRangeChange(undefined)}>
+                <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setCalendarRange(undefined); onDateRangeChange(undefined); }}>
                   Wyczyść daty
                 </Button>
               </div>
