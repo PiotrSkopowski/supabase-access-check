@@ -42,10 +42,7 @@ const ReportsPage = () => {
     queryClient.refetchQueries({ queryKey: ["order_history", reportFilters] });
   };
 
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subMonths(new Date(), 6),
-    to: new Date(),
-  });
+  
   const [view, setView] = useState<View>({ type: "portfolio" });
 
   if (loading) {
