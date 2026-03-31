@@ -10,7 +10,7 @@ import AssortmentAnalysis from "@/components/reports/AssortmentAnalysis";
 import PortfolioView from "@/components/reports/PortfolioView";
 import ClientDrilldown from "@/components/reports/ClientDrilldown";
 import ClientComparison from "@/components/reports/ClientComparison";
-import { useOrderHistory, useSalesOpportunities } from "@/hooks/useOrdersData";
+import { useOrderHistory, useSalesOpportunities, type OrderFiltersParams } from "@/hooks/useOrdersData";
 import type { DateRange } from "react-day-picker";
 
 type View = { type: "portfolio" } | { type: "drilldown"; client: string } | { type: "compare"; clients: string[] };
