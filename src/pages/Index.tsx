@@ -147,7 +147,11 @@ const Index = () => {
     productName: filters.productName || undefined,
     groupName: filters.groupName || undefined,
     dateFrom: dateRange?.from ? dateRange.from.toISOString().split("T")[0] : undefined,
-    dateTo: dateRange?.to ? dateRange.to.toISOString().split("T")[0] : undefined,
+    dateTo: dateRange?.to
+      ? dateRange.to.toISOString().split("T")[0]
+      : dateRange?.from
+      ? dateRange.from.toISOString().split("T")[0]
+      : undefined,
     search: filters.search || undefined,
   };
 
