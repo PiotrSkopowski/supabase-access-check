@@ -17,7 +17,21 @@ type View = { type: "portfolio" } | { type: "drilldown"; client: string } | { ty
 
 const ReportsPage = () => {
   const queryClient = useQueryClient();
-  const { data: orders = [], isLoading: loadingOrders, isFetching: fetchingOrders } = useOrderHistory();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subMonths(new Date(), 6),
+    to: new Date(),
+  });
+
+  const reportFilters: OrderFiltersParams = {
+    dateFrom: dateRange?.from ? dateRange.from.toISOString().split("T")[0] : undefined,
+    dateTo: dateRange?.to
+      ? dateRange.to.toISOString().split("T")[0]
+      : dateRange?.from
+      ? dateRange.from.toISOString().split("T")[0]
+      : undefined,
+  };
+
+  const { data: orders = [], isLoading: loadingOrders, isFetching: fetchingOrders } = useOrderHistory(reportFilters);
   const { data: opportunities = [], isLoading: loadingOpps } = useSalesOpportunities();
 
   const loading = loadingOrders || loadingOpps;
@@ -25,6 +39,7 @@ const ReportsPage = () => {
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ["order_history"] });
     queryClient.invalidateQueries({ queryKey: ["sales_opportunities"] });
+    queryClient.refetchQueries({ queryKey: ["order_history", reportFilters] });
   };
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
