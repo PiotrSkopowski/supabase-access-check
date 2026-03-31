@@ -131,6 +131,7 @@ const PortfolioView = ({
   const [draftThresholds, setDraftThresholds] = useState<SegmentThresholds>(DEFAULT_THRESHOLDS);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [calendarRange, setCalendarRange] = useState<DateRange | undefined>(dateRange);
 
   // Formatted display values for threshold inputs (draft)
   const [displayARevenue, setDisplayARevenue] = useState(formatWithSpaces(DEFAULT_THRESHOLDS.aMinRevenue));
@@ -155,6 +156,17 @@ const PortfolioView = ({
     setSettingsOpen(false);
     toast.success("Ustawienia segmentacji zostały zapisane");
   }, [draftThresholds]);
+
+  const handleCalendarSelect = useCallback((range: DateRange | undefined) => {
+    setCalendarRange(range);
+    if (!range || (range.from && range.to)) {
+      onDateRangeChange(range);
+    }
+  }, [onDateRangeChange]);
+
+  useEffect(() => {
+    setCalendarRange(dateRange);
+  }, [dateRange]);
 
   /* ── Clean orders: exclude forbidden names ── */
   const cleanOrders = useMemo(() => {
@@ -421,15 +433,15 @@ const PortfolioView = ({
           <PopoverContent className="w-auto p-0" align="start">
             <Calendar
               mode="range"
-              selected={dateRange}
-              onSelect={onDateRangeChange}
+              selected={calendarRange}
+              onSelect={handleCalendarSelect}
               numberOfMonths={2}
               locale={pl}
               className="p-3 pointer-events-auto"
             />
             {dateRange?.from && (
               <div className="border-t px-3 py-2">
-                <Button variant="ghost" size="sm" className="text-xs" onClick={() => onDateRangeChange(undefined)}>
+                <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setCalendarRange(undefined); onDateRangeChange(undefined); }}>
                   Wyczyść daty
                 </Button>
               </div>
