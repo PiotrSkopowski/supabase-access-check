@@ -17,7 +17,6 @@ interface DateRangePickerProps {
 }
 
 const DATE_FORMAT = "yyyy-MM-dd";
-const PLACEHOLDER = "RRRR-MM-DD";
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 function parseDate(str: string): Date | null {
