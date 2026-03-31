@@ -145,22 +145,3 @@ export function useCustomers(search?: string) {
     staleTime: STALE_TIME,
   });
 }
-  return useQuery({
-    queryKey: ["sales_opportunities"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sales_opportunities")
-        .select("client_name, opportunity_date, product_name, unit_price, quantity")
-        .not("product_name", "is", null)
-        .neq("product_name", "")
-        .not("unit_price", "is", null)
-        .gt("unit_price", 0)
-        .not("quantity", "is", null)
-        .gt("quantity", 0)
-        .order("opportunity_date", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
-    staleTime: STALE_TIME,
-  });
-}
