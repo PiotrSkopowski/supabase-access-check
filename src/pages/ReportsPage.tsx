@@ -10,14 +10,28 @@ import AssortmentAnalysis from "@/components/reports/AssortmentAnalysis";
 import PortfolioView from "@/components/reports/PortfolioView";
 import ClientDrilldown from "@/components/reports/ClientDrilldown";
 import ClientComparison from "@/components/reports/ClientComparison";
-import { useOrderHistory, useSalesOpportunities } from "@/hooks/useOrdersData";
+import { useOrderHistory, useSalesOpportunities, type OrderFiltersParams } from "@/hooks/useOrdersData";
 import type { DateRange } from "react-day-picker";
 
 type View = { type: "portfolio" } | { type: "drilldown"; client: string } | { type: "compare"; clients: string[] };
 
 const ReportsPage = () => {
   const queryClient = useQueryClient();
-  const { data: orders = [], isLoading: loadingOrders, isFetching: fetchingOrders } = useOrderHistory();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subMonths(new Date(), 6),
+    to: new Date(),
+  });
+
+  const reportFilters: OrderFiltersParams = {
+    dateFrom: dateRange?.from ? dateRange.from.toISOString().split("T")[0] : undefined,
+    dateTo: dateRange?.to
+      ? dateRange.to.toISOString().split("T")[0]
+      : dateRange?.from
+      ? dateRange.from.toISOString().split("T")[0]
+      : undefined,
+  };
+
+  const { data: orders = [], isLoading: loadingOrders, isFetching: fetchingOrders } = useOrderHistory(reportFilters);
   const { data: opportunities = [], isLoading: loadingOpps } = useSalesOpportunities();
 
   const loading = loadingOrders || loadingOpps;
@@ -25,12 +39,10 @@ const ReportsPage = () => {
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ["order_history"] });
     queryClient.invalidateQueries({ queryKey: ["sales_opportunities"] });
+    queryClient.refetchQueries({ queryKey: ["order_history", reportFilters] });
   };
 
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subMonths(new Date(), 6),
-    to: new Date(),
-  });
+  
   const [view, setView] = useState<View>({ type: "portfolio" });
 
   if (loading) {
