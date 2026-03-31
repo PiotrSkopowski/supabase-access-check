@@ -157,6 +157,17 @@ const PortfolioView = ({
     toast.success("Ustawienia segmentacji zostały zapisane");
   }, [draftThresholds]);
 
+  const handleCalendarSelect = useCallback((range: DateRange | undefined) => {
+    setCalendarRange(range);
+    if (!range || (range.from && range.to)) {
+      onDateRangeChange(range);
+    }
+  }, [onDateRangeChange]);
+
+  useEffect(() => {
+    setCalendarRange(dateRange);
+  }, [dateRange]);
+
   /* ── Clean orders: exclude forbidden names ── */
   const cleanOrders = useMemo(() => {
     return orders.filter((o) => {
