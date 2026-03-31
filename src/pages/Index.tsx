@@ -376,40 +376,11 @@ const Index = () => {
   }, [availableStatuses]);
 
   const filteredRows = useMemo(() => {
-    const s = filters.search.toLowerCase();
-    const statusSet = new Set(filters.statuses);
     return allRows.filter((r) => {
-      // Jeśli cena (price) wynosi 0, jest pusta (null) lub niezdefiniowana (undefined) - nie pokazuj tego wiersza
       if (!r.price || r.price === 0) return false;
-      // Status filter
-      if (statusSet.size > 0 && !statusSet.has(r.status || "")) return false;
-      // Date range filter
-      if (dateRange?.from && r.order_date) {
-        const d = new Date(r.order_date);
-        const interval = {
-          start: startOfDay(dateRange.from),
-          end: dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from),
-        };
-        if (!isWithinInterval(d, interval)) return false;
-      }
-      // Blokada klientów testowych i produktów próbnych
-      const forbiddenNames = ["fly4u", "sky rocket", "test", "toptech"];
-      const client = (r.client_name || "").toLowerCase();
-      const product = (r.product_name || "").toLowerCase();
-
-      if (forbiddenNames.some((name) => client.includes(name) || product.includes(name))) {
-        return false;
-      }
-      if (filters.clientName && r.client_name !== filters.clientName) return false;
-      if (filters.productName && r.product_name !== filters.productName) return false;
-      if (filters.groupName && r.group_name !== filters.groupName) return false;
-      if (s) {
-        const haystack = [r.product_name, r.client_name, r.description].filter(Boolean).join(" ").toLowerCase();
-        if (!haystack.includes(s)) return false;
-      }
       return true;
     });
-  }, [allRows, filters, dateRange]);
+  }, [allRows]);
 
   const sortedRows = useMemo(() => {
     if (!sortKey) return filteredRows;

@@ -3,14 +3,69 @@ import { supabase } from "@/lib/supabase";
 
 const STALE_TIME = 5 * 60 * 1000; // 5 minutes
 
-export function useOrderHistory() {
+export interface OrderFiltersParams {
+  statuses?: string[];
+  clientName?: string;
+  productName?: string;
+  groupName?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
+}
+
+export function useOrderHistory(filters?: OrderFiltersParams) {
   return useQuery({
-    queryKey: ["order_history"],
+    queryKey: ["order_history", filters],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("order_history")
         .select("product_id, client_id, client_name, product_name, product_group, product_group_name, currency, price, quantity, prodio_order_id, order_date, description, status")
+        .gt("price", 0)
+        .not("client_name", "ilike", "%toptech%")
+        .not("client_name", "ilike", "%fly4u%")
+        .not("client_name", "ilike", "%sky rocket%")
+        .not("client_name", "ilike", "%test%")
         .order("order_date", { ascending: false });
+
+      if (filters?.statuses && filters.statuses.length > 0) {
+        const withNull = filters.statuses.includes("");
+        const nonNull = filters.statuses.filter(s => s !== "");
+        if (withNull && nonNull.length > 0) {
+          query = query.or(`status.in.(${nonNull.map(s => `"${s}"`).join(",")}),status.is.null`);
+        } else if (withNull) {
+          query = query.is("status", null);
+        } else {
+          query = query.in("status", nonNull);
+        }
+      }
+
+      if (filters?.clientName) {
+        query = query.eq("client_name", filters.clientName);
+      }
+
+      if (filters?.productName) {
+        query = query.eq("product_name", filters.productName);
+      }
+
+      if (filters?.groupName) {
+        query = query.eq("product_group_name", filters.groupName);
+      }
+
+      if (filters?.dateFrom) {
+        query = query.gte("order_date", filters.dateFrom);
+      }
+
+      if (filters?.dateTo) {
+        query = query.lte("order_date", filters.dateTo + "T23:59:59");
+      }
+
+      if (filters?.search) {
+        query = query.or(
+          `product_name.ilike.%${filters.search}%,client_name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
+        );
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
     },
