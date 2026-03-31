@@ -357,9 +357,10 @@ const Index = () => {
     return Array.from(set).sort();
   }, [allRows]);
 
-  // Initialize statuses filter when availableStatuses changes
+  const statusesInitialized = useRef(false);
   useEffect(() => {
-    if (availableStatuses.length > 0 && filters.statuses.length === 0) {
+    if (!statusesInitialized.current && availableStatuses.length > 0) {
+      statusesInitialized.current = true;
       setFilters((prev) => ({ ...prev, statuses: [...availableStatuses] }));
     }
   }, [availableStatuses]);
