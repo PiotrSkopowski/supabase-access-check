@@ -433,8 +433,8 @@ const PortfolioView = ({
           <PopoverContent className="w-auto p-0" align="start">
             <Calendar
               mode="range"
-              selected={dateRange}
-              onSelect={onDateRangeChange}
+              selected={calendarRange}
+              onSelect={handleCalendarSelect}
               numberOfMonths={2}
               locale={pl}
               className="p-3 pointer-events-auto"
