@@ -415,31 +415,10 @@ const PortfolioView = ({
       {/* ── Filters ── */}
       <div className="flex flex-wrap items-center gap-3 print:hidden">
         {/* Date Range Picker */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className={cn("h-10 rounded-md text-sm justify-start min-w-[240px]", !dateRange?.from && "text-muted-foreground")}>
-              <CalendarIcon className="h-4 w-4 mr-2" />
-              {dateRangeLabel}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="range"
-              selected={calendarRange}
-              onSelect={handleCalendarSelect}
-              numberOfMonths={2}
-              locale={pl}
-              className="p-3 pointer-events-auto"
-            />
-            {dateRange?.from && (
-              <div className="border-t px-3 py-2">
-                <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setCalendarRange(undefined); onDateRangeChange(undefined); }}>
-                  Wyczyść daty
-                </Button>
-              </div>
-            )}
-          </PopoverContent>
-        </Popover>
+        <DateRangePicker
+          value={dateRange}
+          onChange={onDateRangeChange}
+        />
 
         {/* Client Multi-Select */}
         <Popover>
