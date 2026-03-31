@@ -187,7 +187,7 @@ const Index = () => {
       }
     }
 
-    console.log("Pobrane dane order_history:", ordersData.slice(0, 5));
+    
 
     const joined: ResultRow[] = ordersData.map((o: any) => {
       const key = o.product_name?.trim().toLowerCase() || "";
