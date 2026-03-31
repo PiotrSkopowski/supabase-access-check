@@ -35,7 +35,11 @@ type SortKey = "product_name" | "client_name" | "order_count" | "sales_count" | 
 type SortDir = "asc" | "desc";
 
 const ProductsPage = () => {
-  const { data: orders = [], isLoading: loadingOrders } = useOrderHistory();
+  const productPageFilters: OrderFiltersParams = {
+    dateFrom: new Date(new Date().setFullYear(new Date().getFullYear() - 2))
+      .toISOString().split("T")[0],
+  };
+  const { data: orders = [], isLoading: loadingOrders } = useOrderHistory(productPageFilters);
   const { data: products = [], isLoading: loadingProducts } = useProducts("name, current_price, group_id");
   const { data: opportunities = [], isLoading: loadingOpps } = useSalesOpportunities();
 
