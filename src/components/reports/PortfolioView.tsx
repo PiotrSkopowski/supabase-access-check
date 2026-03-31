@@ -6,15 +6,15 @@ import {
   Download, FileText, FileSpreadsheet, Users,
   ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
   ChevronsLeft, ChevronsRight, BarChart3, GitCompare, Info,
-  CalendarIcon, Search, Settings, Check,
+  Search, Settings, Check,
 } from "lucide-react";
+import { DateRangePicker } from "@/components/DateRangePicker";
 import { StatusFilter } from "@/components/StatusFilter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -131,7 +131,7 @@ const PortfolioView = ({
   const [draftThresholds, setDraftThresholds] = useState<SegmentThresholds>(DEFAULT_THRESHOLDS);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [calendarRange, setCalendarRange] = useState<DateRange | undefined>(dateRange);
+  
 
   // Formatted display values for threshold inputs (draft)
   const [displayARevenue, setDisplayARevenue] = useState(formatWithSpaces(DEFAULT_THRESHOLDS.aMinRevenue));
@@ -157,16 +157,8 @@ const PortfolioView = ({
     toast.success("Ustawienia segmentacji zostały zapisane");
   }, [draftThresholds]);
 
-  const handleCalendarSelect = useCallback((range: DateRange | undefined) => {
-    setCalendarRange(range);
-    if (!range || (range.from && range.to)) {
-      onDateRangeChange(range);
-    }
-  }, [onDateRangeChange]);
 
-  useEffect(() => {
-    setCalendarRange(dateRange);
-  }, [dateRange]);
+
 
   /* ── Clean orders: exclude forbidden names ── */
   const cleanOrders = useMemo(() => {
@@ -423,31 +415,10 @@ const PortfolioView = ({
       {/* ── Filters ── */}
       <div className="flex flex-wrap items-center gap-3 print:hidden">
         {/* Date Range Picker */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className={cn("h-10 rounded-md text-sm justify-start min-w-[240px]", !dateRange?.from && "text-muted-foreground")}>
-              <CalendarIcon className="h-4 w-4 mr-2" />
-              {dateRangeLabel}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="range"
-              selected={calendarRange}
-              onSelect={handleCalendarSelect}
-              numberOfMonths={2}
-              locale={pl}
-              className="p-3 pointer-events-auto"
-            />
-            {dateRange?.from && (
-              <div className="border-t px-3 py-2">
-                <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setCalendarRange(undefined); onDateRangeChange(undefined); }}>
-                  Wyczyść daty
-                </Button>
-              </div>
-            )}
-          </PopoverContent>
-        </Popover>
+        <DateRangePicker
+          value={dateRange}
+          onChange={onDateRangeChange}
+        />
 
         {/* Client Multi-Select */}
         <Popover>
