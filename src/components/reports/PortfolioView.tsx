@@ -131,7 +131,7 @@ const PortfolioView = ({
   const [draftThresholds, setDraftThresholds] = useState<SegmentThresholds>(DEFAULT_THRESHOLDS);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [calendarRange, setCalendarRange] = useState<DateRange | undefined>(dateRange);
+  
 
   // Formatted display values for threshold inputs (draft)
   const [displayARevenue, setDisplayARevenue] = useState(formatWithSpaces(DEFAULT_THRESHOLDS.aMinRevenue));
