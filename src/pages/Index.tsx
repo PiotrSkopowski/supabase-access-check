@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { isWithinInterval, startOfDay, endOfDay } from "date-fns";
+
 import type { DateRange } from "react-day-picker";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { useOrderHistory, useProducts, useProductGroups, useSalesOpportunities } from "@/hooks/useOrdersData";
+import { useOrderHistory, useProducts, useProductGroups, useSalesOpportunities, type OrderFiltersParams } from "@/hooks/useOrdersData";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -141,7 +141,17 @@ const Index = () => {
   const show = useCallback((col: ToggleableColumn) => !hiddenColumns.has(col), [hiddenColumns]);
 
   // React Query hooks for cached data fetching
-  const { data: ordersData, isLoading: loadingOrders, error: ordersError } = useOrderHistory();
+  const activeFilters: OrderFiltersParams = {
+    statuses: filters.statuses.length > 0 ? filters.statuses : undefined,
+    clientName: filters.clientName || undefined,
+    productName: filters.productName || undefined,
+    groupName: filters.groupName || undefined,
+    dateFrom: dateRange?.from ? dateRange.from.toISOString().split("T")[0] : undefined,
+    dateTo: dateRange?.to ? dateRange.to.toISOString().split("T")[0] : undefined,
+    search: filters.search || undefined,
+  };
+
+  const { data: ordersData, isLoading: loadingOrders, error: ordersError } = useOrderHistory(activeFilters);
   const { data: productsData = [], isLoading: loadingProducts } = useProducts(
     "name, current_price, group_id, sciezka_z",
   );
@@ -366,40 +376,11 @@ const Index = () => {
   }, [availableStatuses]);
 
   const filteredRows = useMemo(() => {
-    const s = filters.search.toLowerCase();
-    const statusSet = new Set(filters.statuses);
     return allRows.filter((r) => {
-      // Jeśli cena (price) wynosi 0, jest pusta (null) lub niezdefiniowana (undefined) - nie pokazuj tego wiersza
       if (!r.price || r.price === 0) return false;
-      // Status filter
-      if (statusSet.size > 0 && !statusSet.has(r.status || "")) return false;
-      // Date range filter
-      if (dateRange?.from && r.order_date) {
-        const d = new Date(r.order_date);
-        const interval = {
-          start: startOfDay(dateRange.from),
-          end: dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from),
-        };
-        if (!isWithinInterval(d, interval)) return false;
-      }
-      // Blokada klientów testowych i produktów próbnych
-      const forbiddenNames = ["fly4u", "sky rocket", "test", "toptech"];
-      const client = (r.client_name || "").toLowerCase();
-      const product = (r.product_name || "").toLowerCase();
-
-      if (forbiddenNames.some((name) => client.includes(name) || product.includes(name))) {
-        return false;
-      }
-      if (filters.clientName && r.client_name !== filters.clientName) return false;
-      if (filters.productName && r.product_name !== filters.productName) return false;
-      if (filters.groupName && r.group_name !== filters.groupName) return false;
-      if (s) {
-        const haystack = [r.product_name, r.client_name, r.description].filter(Boolean).join(" ").toLowerCase();
-        if (!haystack.includes(s)) return false;
-      }
       return true;
     });
-  }, [allRows, filters, dateRange]);
+  }, [allRows]);
 
   const sortedRows = useMemo(() => {
     if (!sortKey) return filteredRows;
