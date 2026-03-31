@@ -1,12 +1,11 @@
-import { useState, useCallback, useEffect } from "react";
-import { format, parse, isValid, subDays } from "date-fns";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { isValid } from "date-fns";
 import { pl } from "date-fns/locale";
 import { CalendarIcon, X } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
 import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
 
@@ -16,31 +15,40 @@ interface DateRangePickerProps {
   className?: string;
 }
 
-const DATE_FORMAT = "yyyy-MM-dd";
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const DEBOUNCE_MS = 600;
 
-function parseDate(str: string): Date | null {
+// Parsuj datę jako lokalną (bez przesunięcia strefy czasowej)
+function parseLocalDate(str: string): Date | null {
   if (!DATE_REGEX.test(str)) return null;
-  const d = parse(str, DATE_FORMAT, new Date());
-  return isValid(d) ? d : null;
+  const [y, m, d] = str.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  const date = new Date(y, m - 1, d);
+  return isValid(date) ? date : null;
 }
 
-function formatDate(d: Date | undefined | null): string {
+// Formatuj datę do stringa bez przesunięcia strefy
+function formatLocalDate(d: Date | undefined | null): string {
   if (!d || !isValid(d)) return "";
-  return format(d, DATE_FORMAT);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export function DateRangePicker({ value, onChange, className }: DateRangePickerProps) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<DateRange | undefined>(value);
-  const [fromText, setFromText] = useState(formatDate(value?.from));
-  const [toText, setToText] = useState(formatDate(value?.to));
+  const [fromText, setFromText] = useState(formatLocalDate(value?.from));
+  const [toText, setToText] = useState(formatLocalDate(value?.to));
   const [fromError, setFromError] = useState(false);
   const [toError, setToError] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Sync gdy zewnętrzna wartość się zmienia
   useEffect(() => {
-    setFromText(formatDate(value?.from));
-    setToText(formatDate(value?.to));
+    setFromText(formatLocalDate(value?.from));
+    setToText(formatLocalDate(value?.to));
     setPending(value);
     setFromError(false);
     setToError(false);
@@ -51,6 +59,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
     setOpen(o);
   }, [value]);
 
+  // Kalendarz — zastosuj tylko gdy oba datą wybrane
   const handleCalendarSelect = useCallback((range: DateRange | undefined) => {
     setPending(range);
     if (!range) {
@@ -62,60 +71,122 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
     }
     if (range.from && range.to) {
       onChange(range);
-      setFromText(formatDate(range.from));
-      setToText(formatDate(range.to));
+      setFromText(formatLocalDate(range.from));
+      setToText(formatLocalDate(range.to));
       setOpen(false);
     }
   }, [onChange]);
 
+  // Ostatnie 30 dni
   const handleLast30 = useCallback(() => {
     const to = new Date();
-    const from = subDays(to, 30);
+    to.setHours(0, 0, 0, 0);
+    const from = new Date(to);
+    from.setDate(from.getDate() - 30);
     const range = { from, to };
     setPending(range);
     onChange(range);
-    setFromText(formatDate(from));
-    setToText(formatDate(to));
+    setFromText(formatLocalDate(from));
+    setToText(formatLocalDate(to));
     setOpen(false);
   }, [onChange]);
 
+  // Pomocnik: wywołaj onChange z debounce
+  const debouncedOnChange = useCallback((range: DateRange | undefined) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onChange(range);
+    }, DEBOUNCE_MS);
+  }, [onChange]);
+
+  // Natychmiastowe zastosowanie (onBlur lub Enter)
+  const applyNow = useCallback((from: string, to: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const fromDate = parseLocalDate(from);
+    const toDate = parseLocalDate(to);
+    if (fromDate && toDate) {
+      onChange({ from: fromDate, to: toDate });
+    } else if (fromDate && !to) {
+      onChange({ from: fromDate, to: undefined });
+    } else if (!from && !to) {
+      onChange(undefined);
+    }
+  }, [onChange]);
+
+  // Pole Od
   const handleFromChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setFromText(val);
     if (val === "") {
       setFromError(false);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       onChange(undefined);
       return;
     }
-    const d = parseDate(val);
+    const d = parseLocalDate(val);
     if (d) {
       setFromError(false);
-      const newRange = { from: d, to: value?.to };
-      if (newRange.from && newRange.to) onChange(newRange);
+      const toDate = parseLocalDate(toText);
+      if (toDate) {
+        debouncedOnChange({ from: d, to: toDate });
+      }
+    } else if (val.length === 10) {
+      setFromError(true);
     } else {
+      setFromError(false);
+    }
+  }, [onChange, toText, debouncedOnChange]);
+
+  const handleFromBlur = useCallback(() => {
+    applyNow(fromText, toText);
+    if (fromText.length > 0 && !parseLocalDate(fromText)) {
       setFromError(true);
     }
-  }, [onChange, value?.to]);
+  }, [fromText, toText, applyNow]);
 
+  const handleFromKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter") applyNow(fromText, toText);
+  }, [fromText, toText, applyNow]);
+
+  // Pole Do
   const handleToChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setToText(val);
     if (val === "") {
       setToError(false);
-      if (value?.from) onChange({ from: value.from, to: undefined });
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      const fromDate = parseLocalDate(fromText);
+      if (fromDate) onChange({ from: fromDate, to: undefined });
       return;
     }
-    const d = parseDate(val);
+    const d = parseLocalDate(val);
     if (d) {
       setToError(false);
-      const newRange = { from: value?.from, to: d };
-      if (newRange.from && newRange.to) onChange(newRange);
+      const fromDate = parseLocalDate(fromText);
+      if (fromDate) {
+        debouncedOnChange({ from: fromDate, to: d });
+      }
+    } else if (val.length === 10) {
+      setToError(true);
     } else {
+      setToError(false);
+    }
+  }, [onChange, fromText, debouncedOnChange]);
+
+  const handleToBlur = useCallback(() => {
+    applyNow(fromText, toText);
+    if (toText.length > 0 && !parseLocalDate(toText)) {
       setToError(true);
     }
-  }, [onChange, value?.from]);
+  }, [fromText, toText, applyNow]);
 
+  const handleToKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter") applyNow(fromText, toText);
+  }, [fromText, toText, applyNow]);
+
+  // Wyczyść
   const handleClear = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     onChange(undefined);
     setFromText("");
     setToText("");
@@ -133,6 +204,8 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
         <Input
           value={fromText}
           onChange={handleFromChange}
+          onBlur={handleFromBlur}
+          onKeyDown={handleFromKeyDown}
           placeholder="RRRR-MM-DD"
           className={cn(
             "h-10 w-[130px] text-sm font-mono pr-2",
@@ -154,6 +227,8 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
         <Input
           value={toText}
           onChange={handleToChange}
+          onBlur={handleToBlur}
+          onKeyDown={handleToKeyDown}
           placeholder="RRRR-MM-DD"
           className={cn(
             "h-10 w-[130px] text-sm font-mono pr-2",
@@ -168,7 +243,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
         )}
       </div>
 
-      {/* Przycisk kalendarza */}
+      {/* Kalendarz */}
       <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button
@@ -207,7 +282,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
         </PopoverContent>
       </Popover>
 
-      {/* Przycisk X — wyczyść */}
+      {/* Wyczyść */}
       {hasValue && (
         <Button
           variant="ghost"
