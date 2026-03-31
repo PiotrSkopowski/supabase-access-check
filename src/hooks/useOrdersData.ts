@@ -70,6 +70,9 @@ export function useOrderHistory(filters?: OrderFiltersParams) {
       return data ?? [];
     },
     staleTime: STALE_TIME,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 }
 
@@ -84,6 +87,8 @@ export function useProducts(fields = "name, current_price, group_id") {
       return (data as any[]) ?? [];
     },
     staleTime: STALE_TIME,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -98,6 +103,8 @@ export function useProductGroups() {
       return data ?? [];
     },
     staleTime: STALE_TIME,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -105,6 +112,8 @@ export function useSalesOpportunities() {
   return useQuery({
     queryKey: ["sales_opportunities"],
     queryFn: async () => {
+      const cutoff = new Date();
+      cutoff.setMonth(cutoff.getMonth() - 18);
       const { data, error } = await supabase
         .from("sales_opportunities")
         .select("client_name, opportunity_date, product_name, unit_price, quantity")
@@ -114,11 +123,14 @@ export function useSalesOpportunities() {
         .gt("unit_price", 0)
         .not("quantity", "is", null)
         .gt("quantity", 0)
+        .gte("opportunity_date", cutoff.toISOString().split("T")[0])
         .order("opportunity_date", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
     staleTime: STALE_TIME,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -143,5 +155,7 @@ export function useCustomers(search?: string) {
       return data ?? [];
     },
     staleTime: STALE_TIME,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
