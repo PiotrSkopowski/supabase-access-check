@@ -148,5 +148,7 @@ export function useCustomers(search?: string) {
       return data ?? [];
     },
     staleTime: STALE_TIME,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
