@@ -121,3 +121,46 @@ export function useSalesOpportunities() {
     staleTime: STALE_TIME,
   });
 }
+
+export function useCustomers(search?: string) {
+  return useQuery({
+    queryKey: ["customers", search],
+    queryFn: async () => {
+      let query = supabase
+        .from("v_customers_crm")
+        .select("id, subiekt_id, name, symbol, nip, city, phone, email, contact_person, contact_phone, contact_email, credit_limit, payment_days, discount, status, notes, total_orders, last_order_date, total_revenue, segment_abc")
+        .eq("status", "aktywny")
+        .order("total_orders", { ascending: false });
+
+      if (search && search.length > 1) {
+        query = query.or(
+          `name.ilike.%${search}%,symbol.ilike.%${search}%,nip.ilike.%${search}%,city.ilike.%${search}%`
+        );
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: STALE_TIME,
+  });
+}
+  return useQuery({
+    queryKey: ["sales_opportunities"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sales_opportunities")
+        .select("client_name, opportunity_date, product_name, unit_price, quantity")
+        .not("product_name", "is", null)
+        .neq("product_name", "")
+        .not("unit_price", "is", null)
+        .gt("unit_price", 0)
+        .not("quantity", "is", null)
+        .gt("quantity", 0)
+        .order("opportunity_date", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: STALE_TIME,
+  });
+}
