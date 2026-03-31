@@ -87,6 +87,8 @@ export function useProducts(fields = "name, current_price, group_id") {
       return (data as any[]) ?? [];
     },
     staleTime: STALE_TIME,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 
